@@ -422,6 +422,16 @@ pub fn activate(app: &adw::Application) {
     app.set_accels_for_action("app.preferences", &["<primary>comma"]);
     app.set_accels_for_action("app.quit", &["<primary>q"]);
 
+    // Hidden demo mode for screenshots: LIFX_PANEL_DEMO=1 populates sample
+    // bulbs and scenes instead of waiting for discovery. Point
+    // XDG_CONFIG_HOME somewhere disposable when using it.
+    if let Some(mode) = std::env::var_os("LIFX_PANEL_DEMO") {
+        demo_populate(&ui);
+        if mode == "scenes" {
+            view_stack.set_visible_child_name("scenes");
+        }
+    }
+
     // Pump backend events into the UI.
     glib::spawn_future_local({
         let ui = ui.clone();
@@ -1619,6 +1629,74 @@ fn show_preferences(ui: &Rc<Ui>) {
     let dialog = adw::PreferencesDialog::new();
     dialog.add(&page);
     dialog.present(Some(&ui.window));
+}
+
+/// Inject sample bulbs and scenes for screenshots (LIFX_PANEL_DEMO).
+fn demo_populate(ui: &Rc<Ui>) {
+    let deg = |d: f64| ((d / 360.0) * 65535.0).round() as u16;
+    let pct = |p: f64| ((p / 100.0) * 65535.0).round() as u16;
+    let bulbs: &[(&str, &str, &str, bool, Hsbk)] = &[
+        ("d073d5000001", "Ceiling", "Living Room", true,
+         Hsbk { hue: 0, saturation: 0, brightness: pct(80.0), kelvin: 2700 }),
+        ("d073d5000002", "Floor Lamp", "Living Room", true,
+         Hsbk { hue: deg(28.0), saturation: pct(85.0), brightness: pct(65.0), kelvin: 3500 }),
+        ("d073d5000003", "TV Backlight", "Living Room", true,
+         Hsbk { hue: deg(278.0), saturation: pct(90.0), brightness: pct(55.0), kelvin: 3500 }),
+        ("d073d5000004", "Bedside", "Bedroom", true,
+         Hsbk { hue: 0, saturation: 0, brightness: pct(35.0), kelvin: 2200 }),
+        ("d073d5000005", "Reading Lamp", "Bedroom", false,
+         Hsbk { hue: 0, saturation: 0, brightness: pct(60.0), kelvin: 2700 }),
+        ("d073d5000006", "Desk", "Office", true,
+         Hsbk { hue: 0, saturation: 0, brightness: pct(100.0), kelvin: 5000 }),
+        ("d073d5000007", "Shelf", "Office", true,
+         Hsbk { hue: deg(190.0), saturation: pct(80.0), brightness: pct(70.0), kelvin: 3500 }),
+    ];
+    for (id, label, room, powered, color) in bulbs {
+        ui.upsert(BulbState {
+            id: id.to_string(),
+            backend: Backend::Lan,
+            label: label.to_string(),
+            group: Some(room.to_string()),
+            powered: *powered,
+            color: *color,
+            connected: true,
+            lan_target: None,
+        });
+    }
+    {
+        let mut cfg = ui.config.borrow_mut();
+        let scene = |name: &str, entries: &[(&str, bool, Hsbk)]| Scene {
+            name: name.to_string(),
+            bulbs: entries
+                .iter()
+                .map(|(id, powered, c)| SceneBulb {
+                    id: id.to_string(),
+                    powered: *powered,
+                    hue: c.hue,
+                    saturation: c.saturation,
+                    brightness: c.brightness,
+                    kelvin: c.kelvin,
+                })
+                .collect(),
+        };
+        cfg.scenes = vec![
+            scene("Movie Night", &[
+                ("d073d5000001", false, Hsbk { hue: 0, saturation: 0, brightness: pct(50.0), kelvin: 2700 }),
+                ("d073d5000002", true, Hsbk { hue: deg(25.0), saturation: pct(90.0), brightness: pct(25.0), kelvin: 3500 }),
+                ("d073d5000003", true, Hsbk { hue: deg(278.0), saturation: pct(95.0), brightness: pct(40.0), kelvin: 3500 }),
+            ]),
+            scene("Focus", &[
+                ("d073d5000006", true, Hsbk { hue: 0, saturation: 0, brightness: pct(100.0), kelvin: 5000 }),
+                ("d073d5000007", true, Hsbk { hue: 0, saturation: 0, brightness: pct(90.0), kelvin: 4500 }),
+            ]),
+            scene("Sunset", &[
+                ("d073d5000001", true, Hsbk { hue: deg(18.0), saturation: pct(80.0), brightness: pct(45.0), kelvin: 3500 }),
+                ("d073d5000002", true, Hsbk { hue: deg(35.0), saturation: pct(95.0), brightness: pct(50.0), kelvin: 3500 }),
+                ("d073d5000003", true, Hsbk { hue: deg(320.0), saturation: pct(75.0), brightness: pct(40.0), kelvin: 3500 }),
+            ]),
+        ];
+    }
+    ui.rebuild_scenes();
 }
 
 fn open_uri(uri: &str) {
