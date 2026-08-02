@@ -1,11 +1,11 @@
-# LIFX Panel
+# Luxel
 
 A native GNOME app (Rust + GTK4 + libadwaita) for controlling LIFX smart bulbs
 from the Linux desktop — no phone required.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="LIFX Panel — Lights view" width="420">
-  <img src="docs/screenshot-scenes.png" alt="LIFX Panel — Scenes view" width="420">
+  <img src="docs/screenshot.png" alt="Luxel — Lights view" width="420">
+  <img src="docs/screenshot-scenes.png" alt="Luxel — Scenes view" width="420">
 </p>
 
 ## Features
@@ -70,8 +70,8 @@ Then build and install:
 
 ```sh
 flatpak-builder --user --install --force-clean build \
-    build-aux/io.github.hyprlab.LifxPanel.json
-flatpak run io.github.hyprlab.LifxPanel
+    build-aux/io.github.hyprlab.Luxel.json
+flatpak run io.github.hyprlab.Luxel
 ```
 
 The flatpak builds offline from vendored crate sources. After changing
@@ -89,7 +89,7 @@ dependencies in `Cargo.toml`, regenerate the list with:
 
 Nothing else: no host filesystem access. The cloud token is stored in the
 app's sandboxed config directory
-(`~/.var/app/io.github.hyprlab.LifxPanel/config/lifx-panel/config.json`).
+(`~/.var/app/io.github.hyprlab.Luxel/config/luxel/config.json`).
 
 ## Architecture
 

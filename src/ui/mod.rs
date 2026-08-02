@@ -179,7 +179,7 @@ pub fn activate(app: &adw::Application) {
 
     // Header bar
     let header = adw::HeaderBar::builder()
-        .title_widget(&adw::WindowTitle::new("LIFX Panel", ""))
+        .title_widget(&adw::WindowTitle::new("Luxel", ""))
         .build();
     let refresh_btn = gtk::Button::builder()
         .icon_name("view-refresh-symbolic")
@@ -189,7 +189,7 @@ pub fn activate(app: &adw::Application) {
     header.pack_start(&refresh_btn);
     let menu = gio::Menu::new();
     menu.append(Some("_Preferences"), Some("app.preferences"));
-    menu.append(Some("_About LIFX Panel"), Some("app.about"));
+    menu.append(Some("_About Luxel"), Some("app.about"));
     let menu_btn = gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
         .menu_model(&menu)
@@ -340,7 +340,7 @@ pub fn activate(app: &adw::Application) {
 
     let window = adw::ApplicationWindow::builder()
         .application(app)
-        .title("LIFX Panel")
+        .title("Luxel")
         .default_width(480)
         .default_height(760)
         .content(&toolbar_view)
@@ -422,10 +422,10 @@ pub fn activate(app: &adw::Application) {
     app.set_accels_for_action("app.preferences", &["<primary>comma"]);
     app.set_accels_for_action("app.quit", &["<primary>q"]);
 
-    // Hidden demo mode for screenshots: LIFX_PANEL_DEMO=1 populates sample
+    // Hidden demo mode for screenshots: LUXEL_DEMO=1 populates sample
     // bulbs and scenes instead of waiting for discovery. Point
     // XDG_CONFIG_HOME somewhere disposable when using it.
-    if let Some(mode) = std::env::var_os("LIFX_PANEL_DEMO") {
+    if let Some(mode) = std::env::var_os("LUXEL_DEMO") {
         demo_populate(&ui);
         if mode == "scenes" {
             view_stack.set_visible_child_name("scenes");
@@ -1631,7 +1631,7 @@ fn show_preferences(ui: &Rc<Ui>) {
     dialog.present(Some(&ui.window));
 }
 
-/// Inject sample bulbs and scenes for screenshots (LIFX_PANEL_DEMO).
+/// Inject sample bulbs and scenes for screenshots (LUXEL_DEMO).
 fn demo_populate(ui: &Rc<Ui>) {
     let deg = |d: f64| ((d / 360.0) * 65535.0).round() as u16;
     let pct = |p: f64| ((p / 100.0) * 65535.0).round() as u16;
@@ -1711,7 +1711,7 @@ fn show_about(ui: &Rc<Ui>) {
     let win = adw::Window::builder()
         .transient_for(&ui.window)
         .modal(false)
-        .title("About LIFX Panel")
+        .title("About Luxel")
         .default_width(460)
         .default_height(640)
         .build();
@@ -1735,7 +1735,7 @@ fn show_about(ui: &Rc<Ui>) {
     icon.set_margin_bottom(10);
     page.append(&icon);
 
-    let name = gtk::Label::new(Some("LIFX Panel"));
+    let name = gtk::Label::new(Some("Luxel"));
     name.add_css_class("title-1");
     page.append(&name);
 
@@ -1808,7 +1808,7 @@ fn show_about(ui: &Rc<Ui>) {
         row
     };
     links.append(&mk_row("Contact — hyprlab@proton.me", "mailto:hyprlab@proton.me"));
-    links.append(&mk_row("Source Code", "https://github.com/hyprlab/lifx-panel"));
+    links.append(&mk_row("Source Code", "https://github.com/hyprlab/luxel"));
     links.append(&mk_row(
         "License (GNU AGPL v3)",
         "https://www.gnu.org/licenses/agpl-3.0.html",
@@ -1848,7 +1848,7 @@ fn show_about(ui: &Rc<Ui>) {
     main_tv.set_content(Some(&scroller));
     nav.add(
         &adw::NavigationPage::builder()
-            .title("About LIFX Panel")
+            .title("About Luxel")
             .tag("main")
             .child(&main_tv)
             .build(),

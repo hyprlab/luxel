@@ -1,6 +1,6 @@
-# LIFX Panel
+# Luxel
 
-LIFX Panel is a native GNOME app for controlling LIFX smart bulbs from the Linux desktop — locally over your network, no phone or cloud account required.
+Luxel is a native GNOME app for controlling LIFX smart bulbs from the Linux desktop — locally over your network, no phone or cloud account required.
 
 ## What's new in 0.1.0
 - Local control over your Wi-Fi/LAN using the LIFX UDP protocol: bulbs are discovered automatically and respond instantly, with no cloud round-trip.
