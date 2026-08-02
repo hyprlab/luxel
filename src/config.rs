@@ -38,14 +38,25 @@ pub struct Config {
 }
 
 fn config_path() -> PathBuf {
-    gtk::glib::user_config_dir().join("lifx-panel").join("config.json")
+    gtk::glib::user_config_dir().join("luxel").join("config.json")
+}
+
+/// Config location from before the app was renamed to Luxel.
+fn legacy_config_path() -> PathBuf {
+    gtk::glib::user_config_dir()
+        .join("lifx-panel")
+        .join("config.json")
 }
 
 impl Config {
     pub fn load() -> Config {
-        fs::read_to_string(config_path())
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
+        let read = |path: PathBuf| {
+            fs::read_to_string(path)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+        };
+        read(config_path())
+            .or_else(|| read(legacy_config_path()))
             .unwrap_or_default()
     }
 

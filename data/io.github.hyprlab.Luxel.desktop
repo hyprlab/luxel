@@ -1,8 +1,8 @@
 [Desktop Entry]
-Name=LIFX Panel
+Name=Luxel
 Comment=Control LIFX smart bulbs from your desktop
-Exec=lifx-panel
-Icon=io.github.hyprlab.LifxPanel
+Exec=luxel
+Icon=io.github.hyprlab.Luxel
 Terminal=false
 Type=Application
 Categories=Utility;GTK;GNOME;

@@ -1,9 +1,9 @@
 [package]
-name = "lifx-panel"
+name = "luxel"
 version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
-repository = "https://github.com/hyprlab/lifx-panel"
+repository = "https://github.com/hyprlab/luxel"
 description = "Control LIFX smart bulbs from the GNOME desktop"
 
 [dependencies]

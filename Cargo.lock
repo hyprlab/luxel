@@ -751,19 +751,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lifx-panel"
-version = "0.1.0"
-dependencies = [
- "async-channel",
- "gtk4",
- "libadwaita",
- "lifx-core",
- "serde",
- "serde_json",
- "ureq",
-]
-
-[[package]]
 name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -780,6 +767,19 @@ name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
+
+[[package]]
+name = "luxel"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "gtk4",
+ "libadwaita",
+ "lifx-core",
+ "serde",
+ "serde_json",
+ "ureq",
+]
 
 [[package]]
 name = "memchr"
