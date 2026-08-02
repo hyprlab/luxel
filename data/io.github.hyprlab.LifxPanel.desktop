@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=LIFX Panel
+Comment=Control LIFX smart bulbs from your desktop
+Exec=lifx-panel
+Icon=io.github.hyprlab.LifxPanel
+Terminal=false
+Type=Application
+Categories=Utility;GTK;GNOME;
+Keywords=lifx;light;bulb;lamp;smart;home;
+StartupNotify=true

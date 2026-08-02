@@ -1,0 +1,50 @@
+{
+    "id": "io.github.hyprlab.LifxPanel",
+    "runtime": "org.gnome.Platform",
+    "runtime-version": "50",
+    "sdk": "org.gnome.Sdk",
+    "sdk-extensions": [
+        "org.freedesktop.Sdk.Extension.rust-stable"
+    ],
+    "command": "lifx-panel",
+    "finish-args": [
+        "--share=network",
+        "--share=ipc",
+        "--socket=fallback-x11",
+        "--socket=wayland",
+        "--device=dri"
+    ],
+    "build-options": {
+        "append-path": "/usr/lib/sdk/rust-stable/bin",
+        "env": {
+            "CARGO_HOME": "/run/build/lifx-panel/cargo"
+        }
+    },
+    "modules": [
+        {
+            "name": "lifx-panel",
+            "buildsystem": "simple",
+            "build-commands": [
+                "cargo --offline fetch --manifest-path Cargo.toml",
+                "cargo --offline build --release",
+                "install -Dm755 target/release/lifx-panel -t /app/bin/",
+                "install -Dm644 data/io.github.hyprlab.LifxPanel.desktop -t /app/share/applications/",
+                "install -Dm644 data/io.github.hyprlab.LifxPanel.metainfo.xml -t /app/share/metainfo/",
+                "install -Dm644 data/icons/io.github.hyprlab.LifxPanel-512.png /app/share/icons/hicolor/512x512/apps/io.github.hyprlab.LifxPanel.png",
+                "install -Dm644 data/icons/io.github.hyprlab.LifxPanel-256.png /app/share/icons/hicolor/256x256/apps/io.github.hyprlab.LifxPanel.png",
+                "install -Dm644 data/icons/io.github.hyprlab.LifxPanel-128.png /app/share/icons/hicolor/128x128/apps/io.github.hyprlab.LifxPanel.png",
+                "install -Dm644 data/icons/io.github.hyprlab.LifxPanel-64.png /app/share/icons/hicolor/64x64/apps/io.github.hyprlab.LifxPanel.png",
+                "install -Dm644 data/icons/io.github.hyprlab.LifxPanel-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps/",
+                "install -Dm644 data/icons/update-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps/",
+                "install -Dm644 data/icons/external-link-symbolic.svg -t /app/share/icons/hicolor/symbolic/apps/"
+            ],
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": ".."
+                },
+                "cargo-sources.json"
+            ]
+        }
+    ]
+}
