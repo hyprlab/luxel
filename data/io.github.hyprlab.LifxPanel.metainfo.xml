@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.hyprlab.LifxPanel</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>LIFX Panel</name>
+  <summary>Control LIFX smart bulbs from your desktop</summary>
+  <description>
+    <p>
+      LIFX Panel discovers LIFX smart bulbs on your local network and lets you
+      switch them on and off, dim them, tune white color temperature, and set
+      colors — all without a phone or cloud account. Group lights by room,
+      control whole rooms or the whole house at once, and save scenes you can
+      restore with one click.
+    </p>
+    <p>
+      Optionally, add a LIFX Cloud personal access token to control lights
+      remotely when local discovery is unavailable.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.hyprlab.LifxPanel.desktop</launchable>
+  <developer id="io.github.hyprlab">
+    <name>Hyprlab</name>
+  </developer>
+  <url type="homepage">https://github.com/hyprlab/lifx-panel</url>
+  <url type="bugtracker">https://github.com/hyprlab/lifx-panel/issues</url>
+  <url type="vcs-browser">https://github.com/hyprlab/lifx-panel</url>
+  <update_contact>hyprlab@proton.me</update_contact>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <releases>
+    <release version="0.1.0" date="2026-08-02">
+      <description>
+        <p>Initial release: local LAN control, rooms, scenes, color wheel, and optional LIFX Cloud support.</p>
+      </description>
+    </release>
+  </releases>
+</component>
