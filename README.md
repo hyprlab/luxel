@@ -3,7 +3,10 @@
 A native GNOME app (Rust + GTK4 + libadwaita) for controlling LIFX smart bulbs
 from the Linux desktop — no phone required.
 
-![screenshot placeholder]()
+<p align="center">
+  <img src="docs/screenshot.png" alt="LIFX Panel — Lights view" width="420">
+  <img src="docs/screenshot-scenes.png" alt="LIFX Panel — Scenes view" width="420">
+</p>
 
 ## Features
 
