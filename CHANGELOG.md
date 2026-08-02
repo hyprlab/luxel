@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 — 2026-08-02
+- New app icon (all sizes regenerated; also used by the website and the Flatpak repo metadata).
+- Flatpak builds now publish on the `stable` branch and are distributed from the self-hosted signed OSTree repo at luxel.hyprlab.co/flatpak, giving installed users automatic updates.
+
 ## 0.1.0 — 2026-08-02
 - Initial release.
 - LAN backend speaking the LIFX UDP protocol (port 56700): broadcast discovery every 10 s, per-bulb state polling every 3 s, instant set-power/set-color with smooth transitions. Binds the well-known LIFX port when free so firewalled setups still receive broadcast replies.

@@ -2,7 +2,11 @@
 
 Luxel is a native GNOME app for controlling LIFX smart bulbs from the Linux desktop — locally over your network, no phone or cloud account required.
 
-## What's new in 0.1.0
+## What's new in 0.1.1
+- A refreshed app icon.
+- Installs now come from Luxel's own Flatpak repository at luxel.hyprlab.co, so the app updates automatically with `flatpak update` (or through GNOME Software).
+
+## In 0.1.0
 - Local control over your Wi-Fi/LAN using the LIFX UDP protocol: bulbs are discovered automatically and respond instantly, with no cloud round-trip.
 - Rooms: lights group into room cards with their own color, brightness, and power controls, plus an All Lights card for the whole house. Rooms collapse and expand with a smooth animation.
 - Scenes: capture the current look of your lights (choosing exactly which to include), then restore it with one click. Scenes can be updated, renamed, and deleted.
