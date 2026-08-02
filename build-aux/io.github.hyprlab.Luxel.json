@@ -1,5 +1,6 @@
 {
     "id": "io.github.hyprlab.Luxel",
+    "branch": "stable",
     "runtime": "org.gnome.Platform",
     "runtime-version": "50",
     "sdk": "org.gnome.Sdk",
