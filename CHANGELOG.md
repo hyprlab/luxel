@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 — 2026-08-02
+- Scene export/import: the Scenes tab menu writes all scenes to a versioned JSON file and reads them back (same-name scenes replaced, others added; a bare JSON scene array also parses). File dialogs use the desktop portal, so no new sandbox permissions. Results are reported via a new toast overlay.
+- The Flatpak repo install files (.flatpakref/.flatpakrepo/public key) are now tracked in dist-files/.
+
 ## 0.1.1 — 2026-08-02
 - New app icon (all sizes regenerated; also used by the website and the Flatpak repo metadata).
 - Flatpak builds now publish on the `stable` branch and are distributed from the self-hosted signed OSTree repo at luxel.hyprlab.co/flatpak, giving installed users automatic updates.
