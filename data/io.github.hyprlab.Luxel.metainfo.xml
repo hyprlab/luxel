@@ -33,6 +33,11 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.1.2" date="2026-08-02">
+      <description>
+        <p>Scenes can now be exported to a file and imported back.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-08-02">
       <description>
         <p>New app icon, and installs now update automatically from Luxel's own Flatpak repository.</p>

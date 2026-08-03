@@ -2,7 +2,10 @@
 
 Luxel is a native GNOME app for controlling LIFX smart bulbs from the Linux desktop — locally over your network, no phone or cloud account required.
 
-## What's new in 0.1.1
+## What's new in 0.1.2
+- Scenes can now be exported to a JSON file and imported back — share them between machines or keep a backup. Find both in the new menu next to "Save Current" on the Scenes tab. Importing replaces scenes with matching names and adds the rest, so re-importing is always safe.
+
+## In 0.1.1
 - A refreshed app icon.
 - Installs now come from Luxel's own Flatpak repository at luxel.hyprlab.co, so the app updates automatically with `flatpak update` (or through GNOME Software).
 
