@@ -1,0 +1,9 @@
+[Flatpak Ref]
+Title=Luxel
+Name=io.github.hyprlab.Luxel
+Branch=stable
+Url=https://luxel.hyprlab.co/flatpak
+Homepage=https://luxel.hyprlab.co
+RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo
+IsRuntime=false
+GPGKey=mDMEam/NKhYJKwYBBAHaRw8BAQdAd86AFxQIoHPXvoxHM+WRXLhT5MRbVtdh0+eWKZx0UJ60LEx1eGVsIEZsYXRwYWsgUmVwb3NpdG9yeSA8aHlwcmxhYkBwcm90b24ubWU+iJMEExYKADsWIQSZSqIqW35/4dd5Q7Zzrjdh1MGoygUCam/NKgIbAwULCQgHAgIiAgYVCgkICwIEFgIDAQIeBwIXgAAKCRBzrjdh1MGoysVFAQCRjjsdMRHuoslMX0OaBTNaS5N7GlkpZZdLYeH6iTdUSgD/flsCUWrDefaQ0WleJiVROfTYM/AWreJKsTQacWOJIQc=

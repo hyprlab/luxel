@@ -11,7 +11,7 @@ use adw::prelude::*;
 use gtk::glib::SignalHandlerId;
 use gtk::{gio, glib};
 
-use crate::config::{Config, Scene, SceneBulb};
+use crate::config::{Config, Scene, SceneBulb, ScenesFile};
 use crate::model::{Backend, BulbState, CloudCommand, Event, Hsbk, LanCommand, Subnet};
 use crate::{cloud, lan};
 use bulb_row::BulbRow;
@@ -54,6 +54,7 @@ pub struct Ui {
     pub window: adw::ApplicationWindow,
     stack: gtk::Stack,
     banner: adw::Banner,
+    toasts: adw::ToastOverlay,
     scenes_group: adw::PreferencesGroup,
     scene_rows: RefCell<Vec<adw::ActionRow>>,
     house_switch: gtk::Switch,
@@ -247,7 +248,23 @@ pub fn activate(app: &adw::Application) {
         .css_classes(["flat"])
         .valign(gtk::Align::Center)
         .build();
-    scenes_group.set_header_suffix(Some(&save_scene_btn));
+    let scenes_menu = gio::Menu::new();
+    scenes_menu.append(Some("_Import Scenes…"), Some("app.import-scenes"));
+    scenes_menu.append(Some("_Export Scenes…"), Some("app.export-scenes"));
+    let scenes_more_btn = gtk::MenuButton::builder()
+        .icon_name("view-more-symbolic")
+        .menu_model(&scenes_menu)
+        .css_classes(["flat"])
+        .valign(gtk::Align::Center)
+        .tooltip_text("Import or export scenes")
+        .build();
+    let scenes_header_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .build();
+    scenes_header_box.append(&save_scene_btn);
+    scenes_header_box.append(&scenes_more_btn);
+    scenes_group.set_header_suffix(Some(&scenes_header_box));
 
     // Whole-house master controls
     let house_switch = gtk::Switch::builder().valign(gtk::Align::Center).build();
@@ -333,10 +350,12 @@ pub fn activate(app: &adw::Application) {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content.append(&banner);
     content.append(&stack);
+    let toasts = adw::ToastOverlay::new();
+    toasts.set_child(Some(&content));
 
     let toolbar_view = adw::ToolbarView::new();
     toolbar_view.add_top_bar(&header);
-    toolbar_view.set_content(Some(&content));
+    toolbar_view.set_content(Some(&toasts));
 
     let window = adw::ApplicationWindow::builder()
         .application(app)
@@ -350,6 +369,7 @@ pub fn activate(app: &adw::Application) {
         window: window.clone(),
         stack,
         banner,
+        toasts,
         scenes_group,
         scene_rows: RefCell::new(Vec::new()),
         house_switch: house_switch.clone(),
@@ -417,7 +437,19 @@ pub fn activate(app: &adw::Application) {
     let quit = gio::ActionEntry::builder("quit")
         .activate(|app: &adw::Application, _, _| app.quit())
         .build();
-    app.add_action_entries([refresh, preferences, about, quit]);
+    let export_scenes = gio::ActionEntry::builder("export-scenes")
+        .activate({
+            let ui = ui.clone();
+            move |_: &adw::Application, _, _| export_scenes_dialog(&ui)
+        })
+        .build();
+    let import_scenes = gio::ActionEntry::builder("import-scenes")
+        .activate({
+            let ui = ui.clone();
+            move |_: &adw::Application, _, _| import_scenes_dialog(&ui)
+        })
+        .build();
+    app.add_action_entries([refresh, preferences, about, quit, export_scenes, import_scenes]);
     app.set_accels_for_action("app.refresh", &["<primary>r"]);
     app.set_accels_for_action("app.preferences", &["<primary>comma"]);
     app.set_accels_for_action("app.quit", &["<primary>q"]);
@@ -758,6 +790,10 @@ impl Ui {
         };
         self.route_color(&snapshot, snapshot.state.color, duration_ms);
         self.refresh_row(id, &snapshot);
+    }
+
+    fn toast(&self, message: &str) {
+        self.toasts.add_toast(adw::Toast::new(message));
     }
 
     /// Toggle one bulb (from its row's switch).
@@ -1324,6 +1360,100 @@ fn new_room_section(room: &str, ui: &Rc<Ui>) -> RoomSection {
         dot,
         dot_color,
     }
+}
+
+fn scenes_json_filters() -> gio::ListStore {
+    let filter = gtk::FileFilter::new();
+    filter.set_name(Some("Luxel scenes (JSON)"));
+    filter.add_pattern("*.json");
+    let filters = gio::ListStore::new::<gtk::FileFilter>();
+    filters.append(&filter);
+    filters
+}
+
+fn export_scenes_dialog(ui: &Rc<Ui>) {
+    let count = ui.config.borrow().scenes.len();
+    if count == 0 {
+        ui.toast("No scenes to export yet");
+        return;
+    }
+    let dialog = gtk::FileDialog::builder()
+        .title("Export Scenes")
+        .initial_name("luxel-scenes.json")
+        .filters(&scenes_json_filters())
+        .build();
+    let ui = ui.clone();
+    dialog.save(Some(&ui.window.clone()), gio::Cancellable::NONE, move |result| {
+        let Ok(file) = result else { return }; // dismissed
+        let Some(path) = file.path() else { return };
+        let data = ScenesFile {
+            app: "luxel".to_string(),
+            version: 1,
+            scenes: ui.config.borrow().scenes.clone(),
+        };
+        let written = serde_json::to_string_pretty(&data)
+            .map_err(|e| e.to_string())
+            .and_then(|json| std::fs::write(&path, json).map_err(|e| e.to_string()));
+        match written {
+            Ok(()) => ui.toast(&if count == 1 {
+                "Exported 1 scene".to_string()
+            } else {
+                format!("Exported {count} scenes")
+            }),
+            Err(e) => ui.toast(&format!("Export failed: {e}")),
+        }
+    });
+}
+
+fn import_scenes_dialog(ui: &Rc<Ui>) {
+    let dialog = gtk::FileDialog::builder()
+        .title("Import Scenes")
+        .filters(&scenes_json_filters())
+        .build();
+    let ui = ui.clone();
+    dialog.open(Some(&ui.window.clone()), gio::Cancellable::NONE, move |result| {
+        let Ok(file) = result else { return }; // dismissed
+        let Some(path) = file.path() else { return };
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) => {
+                ui.toast(&format!("Import failed: {e}"));
+                return;
+            }
+        };
+        // Accept the wrapped format or a bare scene array.
+        let imported: Vec<Scene> = match serde_json::from_str::<ScenesFile>(&text)
+            .map(|f| f.scenes)
+            .or_else(|_| serde_json::from_str::<Vec<Scene>>(&text))
+        {
+            Ok(scenes) => scenes,
+            Err(_) => {
+                ui.toast("Import failed: not a Luxel scenes file");
+                return;
+            }
+        };
+        if imported.is_empty() {
+            ui.toast("The file contains no scenes");
+            return;
+        }
+        let count = imported.len();
+        {
+            let mut cfg = ui.config.borrow_mut();
+            for scene in imported {
+                // Same-name scenes are replaced, so re-importing is safe.
+                cfg.scenes.retain(|s| s.name != scene.name);
+                cfg.scenes.push(scene);
+            }
+            cfg.scenes.sort_by_key(|s| s.name.to_lowercase());
+            cfg.save();
+        }
+        ui.rebuild_scenes();
+        ui.toast(&if count == 1 {
+            "Imported 1 scene".to_string()
+        } else {
+            format!("Imported {count} scenes")
+        });
+    });
 }
 
 fn show_rename_scene_dialog(ui: &Rc<Ui>, name: &str) {

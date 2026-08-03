@@ -1,0 +1,8 @@
+[Flatpak Repo]
+Title=Luxel
+Url=https://luxel.hyprlab.co/flatpak
+Homepage=https://luxel.hyprlab.co
+Comment=Control LIFX smart bulbs from your desktop
+Description=Official Flatpak repository for Luxel
+Icon=https://raw.githubusercontent.com/hyprlab/luxel/main/data/icons/io.github.hyprlab.Luxel-512.png
+GPGKey=mDMEam/NKhYJKwYBBAHaRw8BAQdAd86AFxQIoHPXvoxHM+WRXLhT5MRbVtdh0+eWKZx0UJ60LEx1eGVsIEZsYXRwYWsgUmVwb3NpdG9yeSA8aHlwcmxhYkBwcm90b24ubWU+iJMEExYKADsWIQSZSqIqW35/4dd5Q7Zzrjdh1MGoygUCam/NKgIbAwULCQgHAgIiAgYVCgkICwIEFgIDAQIeBwIXgAAKCRBzrjdh1MGoysVFAQCRjjsdMRHuoslMX0OaBTNaS5N7GlkpZZdLYeH6iTdUSgD/flsCUWrDefaQ0WleJiVROfTYM/AWreJKsTQacWOJIQc=
