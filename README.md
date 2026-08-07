@@ -101,6 +101,16 @@ app's sandboxed config directory
   number, so a bulb seen by both is merged into a single row; commands route
   to the LAN when the bulb is locally reachable, falling back to the cloud.
 
+## AI notice
+
+Luxel is built by a human maintainer working with generative AI as a development tool:
+
+- **Code** — the large majority of the Rust code in this repository was written with Anthropic's Claude (via Claude Code), working from the maintainer's direction. The maintainer decides what gets built, reviews the results, tests every release, and signs off on everything that ships.
+- **Text** — documentation, release notes, and in-app copy are largely AI-drafted and human-edited.
+- **The app itself contains no AI.** Luxel has no AI features and makes no requests to AI services — it talks only to your LIFX bulbs on your local network. AI was used to *build* the app, not to run it.
+
+Bug reports and pull requests are welcome from humans and their AI tools alike; everything merged gets the same human review.
+
 ## License
 
 AGPL-3.0-or-later
