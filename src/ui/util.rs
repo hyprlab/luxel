@@ -115,6 +115,18 @@ impl Throttler {
 }
 
 /// The color a bulb visually shows at full value (ignoring brightness).
+/// Strip a scale's built-in scroll controller: wheeling through the page
+/// must scroll the page, not tweak whatever slider the pointer crosses.
+pub fn disable_scroll(scale: &gtk::Scale) {
+    let controllers = scale.observe_controllers();
+    let scroll: Vec<gtk::EventControllerScroll> = (0..controllers.n_items())
+        .filter_map(|i| controllers.item(i)?.downcast().ok())
+        .collect();
+    for controller in scroll {
+        scale.remove_controller(&controller);
+    }
+}
+
 pub fn visible_rgb(c: &crate::model::Hsbk) -> (f64, f64, f64) {
     if c.saturation == 0 {
         kelvin_to_rgb(c.kelvin)

@@ -27,21 +27,36 @@ impl Default for Hsbk {
 pub enum Backend {
     Lan,
     Cloud,
+    /// Tuya/SmartLife local protocol (TCP port 6668).
+    Tuya,
 }
 
-/// Snapshot of a bulb's state as reported by one backend.
+/// What kind of device this is, which decides the controls the UI offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DeviceKind {
+    /// Full-color LIFX bulb: power, brightness, color, warmth.
+    #[default]
+    Bulb,
+    /// On/off smart plug: power only.
+    Plug,
+}
+
+/// Snapshot of a device's state as reported by one backend.
 #[derive(Debug, Clone)]
 pub struct BulbState {
-    /// Canonical bulb id: the 12-hex-digit serial. Identical for the LAN and
-    /// Cloud backends, which is what lets us merge the two views of a bulb.
+    /// Canonical device id. For LIFX this is the 12-hex-digit serial,
+    /// identical for the LAN and Cloud backends, which is what lets us merge
+    /// the two views of a bulb. Tuya devices use "tuya:<device id>" so they
+    /// can never collide with a LIFX serial.
     pub id: String,
     pub backend: Backend,
+    pub kind: DeviceKind,
     pub label: String,
     pub group: Option<String>,
     pub powered: bool,
     pub color: Hsbk,
     pub connected: bool,
-    /// LAN protocol target address (only set by the LAN backend).
+    /// LAN protocol target address (only set by the LIFX LAN backend).
     pub lan_target: Option<u64>,
 }
 
@@ -51,6 +66,15 @@ pub enum Event {
     Upsert(BulbState),
     /// `Some(message)` shows the error banner, `None` clears it.
     CloudError(Option<String>),
+    /// A network scan located a configured Tuya device (raw device id,
+    /// without the "tuya:" prefix) at `host`, speaking `version`.
+    TuyaFound {
+        id: String,
+        host: String,
+        version: String,
+    },
+    /// A Tuya network scan finished, having located `found` devices.
+    TuyaLocateDone { found: usize },
 }
 
 /// An IPv4 subnet in CIDR form, used for cross-VLAN discovery probes.
@@ -125,6 +149,26 @@ pub enum LanCommand {
         target: u64,
         color: Hsbk,
         duration_ms: u32,
+    },
+}
+
+/// Commands the UI sends to the Tuya controller thread.
+#[derive(Debug, Clone)]
+pub enum TuyaCommand {
+    /// Replace the set of configured Tuya devices.
+    Configure(Vec<crate::config::TuyaDevice>),
+    Refresh,
+    SetPower {
+        /// Device id in "tuya:<device id>" form.
+        id: String,
+        on: bool,
+    },
+    /// Scan `subnets` for hosts listening on TCP 6668 and match them to
+    /// `devices` by trying each device's local key; answers arrive as
+    /// `Event::TuyaFound` / `Event::TuyaLocateDone`.
+    Locate {
+        devices: Vec<crate::config::TuyaDevice>,
+        subnets: Vec<Subnet>,
     },
 }
 

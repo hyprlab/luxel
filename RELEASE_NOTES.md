@@ -1,8 +1,13 @@
 # Luxel
 
-Luxel is a native GNOME app for controlling LIFX smart bulbs from the Linux desktop — locally over your network, no phone or cloud account required.
+## What's new in 1.2.0
+- SmartLife/Tuya smart plug support: plugs are controlled entirely over your local network (works across subnets and VLANs), show a power switch in the lights list, join rooms and scenes, and count into the room and All Lights switches.
+- A guided SmartLife Setup wizard (in Settings) does the whole onboarding: it walks you through creating the free Tuya developer account and linking the SmartLife app, then fetches every device's keys straight from the Tuya cloud and finds the devices on your network automatically — no terminal, no files. After setup, control never touches the cloud again.
+- Preferences is now called Settings, with the SmartLife section split into a setup group and a device list, and live per-device connection status.
+- The primary menu follows the GNOME HIG, including a new Keyboard Shortcuts dialog (Ctrl+?).
+- Refreshed app icon.
 
-## What's new in 0.1.2
+## In 0.1.2
 - Scenes can now be exported to a JSON file and imported back — share them between machines or keep a backup. Find both in the new menu next to "Save Current" on the Scenes tab. Importing replaces scenes with matching names and adds the rest, so re-importing is always safe.
 
 ## In 0.1.1

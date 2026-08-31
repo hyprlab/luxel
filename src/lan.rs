@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use lifx_core::{BuildOptions, Message, RawMessage, Service, HSBK};
 
-use crate::model::{Backend, BulbState, Event, Hsbk, LanCommand, Subnet};
+use crate::model::{Backend, BulbState, DeviceKind, Event, Hsbk, LanCommand, Subnet};
 
 /// Arbitrary non-zero client id; bulbs echo it back so we can tell our own
 /// traffic apart, and a non-zero source makes bulbs reply via unicast.
@@ -257,6 +257,7 @@ fn emit(events: &async_channel::Sender<Event>, target: u64, dev: &Device) {
     let _ = events.send_blocking(Event::Upsert(BulbState {
         id: serial_hex(target),
         backend: Backend::Lan,
+        kind: DeviceKind::Bulb,
         label: label.clone(),
         group: dev.group.clone(),
         powered: dev.powered,

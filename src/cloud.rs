@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::model::{Backend, BulbState, CloudCommand, Event, Hsbk};
+use crate::model::{Backend, BulbState, CloudCommand, DeviceKind, Event, Hsbk};
 
 const API: &str = "https://api.lifx.com/v1";
 const POLL_INTERVAL: Duration = Duration::from_secs(15);
@@ -159,7 +159,7 @@ fn set_state(
 fn describe_error(e: &ureq::Error) -> String {
     match e {
         ureq::Error::StatusCode(401) => {
-            "LIFX Cloud rejected the access token. Check it in Preferences.".into()
+            "LIFX Cloud rejected the access token. Check it in Settings.".into()
         }
         ureq::Error::StatusCode(code) => format!("LIFX Cloud returned an error (HTTP {code})."),
         other => format!("Could not reach the LIFX Cloud: {other}"),
@@ -170,6 +170,7 @@ fn to_state(light: CloudLight) -> BulbState {
     BulbState {
         id: light.id.to_lowercase(),
         backend: Backend::Cloud,
+        kind: DeviceKind::Bulb,
         label: light.label,
         group: light.group.map(|g| g.name),
         powered: light.power == "on",
