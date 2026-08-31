@@ -1,3 +1,9 @@
 /target
 /temp
 /repo
+
+# tinytuya wizard output (contains device local keys and API credentials)
+/devices.json
+/snapshot.json
+/tinytuya.json
+/tuya-raw.json

@@ -1,22 +1,26 @@
 mod bulb_row;
 mod color_wheel;
 mod util;
+mod wizard;
 
 use std::cell::{OnceCell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::mpsc;
+use std::time::Duration;
 
 use adw::prelude::*;
 use gtk::glib::SignalHandlerId;
 use gtk::{gio, glib};
 
-use crate::config::{Config, Scene, SceneBulb, ScenesFile};
-use crate::model::{Backend, BulbState, CloudCommand, Event, Hsbk, LanCommand, Subnet};
-use crate::{cloud, lan};
+use crate::config::{Config, Scene, SceneBulb, ScenesFile, TuyaDevice};
+use crate::model::{
+    Backend, BulbState, CloudCommand, DeviceKind, Event, Hsbk, LanCommand, Subnet, TuyaCommand,
+};
+use crate::{cloud, lan, tuya};
 use bulb_row::BulbRow;
 use color_wheel::ColorWheel;
-use util::{color_dot, scene_chip, visible_rgb, SharedColors, Throttler};
+use util::{color_dot, disable_scroll, scene_chip, visible_rgb, SharedColors, Throttler};
 
 /// Room name for bulbs with no LIFX group and no user-assigned room.
 const UNGROUPED: &str = "Other";
@@ -46,6 +50,8 @@ struct RoomSection {
     h_switch: SignalHandlerId,
     scale: gtk::Scale,
     h_scale: SignalHandlerId,
+    spin: gtk::SpinButton,
+    color_btn: gtk::MenuButton,
     dot: gtk::DrawingArea,
     dot_color: SharedColors,
 }
@@ -61,6 +67,8 @@ pub struct Ui {
     h_house_switch: OnceCell<SignalHandlerId>,
     house_scale: gtk::Scale,
     h_house_scale: OnceCell<SignalHandlerId>,
+    house_spin: gtk::SpinButton,
+    house_color_btn: gtk::MenuButton,
     house_dot: gtk::DrawingArea,
     house_dot_color: SharedColors,
     rooms_box: gtk::Box,
@@ -71,6 +79,7 @@ pub struct Ui {
     merged: RefCell<HashMap<String, Merged>>,
     lan_tx: mpsc::Sender<LanCommand>,
     cloud_tx: mpsc::Sender<CloudCommand>,
+    tuya_tx: mpsc::Sender<TuyaCommand>,
     config: RefCell<Config>,
 }
 
@@ -104,6 +113,7 @@ fn compact_scale() -> gtk::Scale {
     scale.set_size_request(120, -1);
     scale.set_valign(gtk::Align::Center);
     scale.set_tooltip_text(Some("Brightness"));
+    disable_scroll(&scale);
     scale
 }
 
@@ -135,6 +145,18 @@ const APP_CSS: &str = "
   font-weight: 600;
 }
 .about-coffee { font-size: 1.2em; }
+.plug-chip {
+  background-color: @accent_bg_color;
+  color: white;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.75em;
+  font-weight: 700;
+}
+.plug-chip.off {
+  background-color: alpha(@accent_bg_color, 0.22);
+  color: alpha(white, 0.5);
+}
 list.room-lights { background: transparent; }
 list.room-lights > row { background: transparent; }
 list.room-lights > row + row { border-top: 1px solid alpha(currentColor, 0.08); }
@@ -144,6 +166,32 @@ pub fn activate(app: &adw::Application) {
     if let Some(window) = app.active_window() {
         window.present();
         return;
+    }
+
+    // Make the bundled icons available no matter how the app was launched
+    // (installed themes only cover the flatpak): write them to the cache
+    // dir and register it as an unthemed icon search path.
+    let icon_dir = glib::user_cache_dir().join("luxel").join("icons");
+    let _ = std::fs::create_dir_all(&icon_dir);
+    let bundled: [(&str, &[u8]); 3] = [
+        (
+            "external-link-symbolic.svg",
+            include_bytes!("../../data/icons/external-link-symbolic.svg"),
+        ),
+        (
+            "update-symbolic.svg",
+            include_bytes!("../../data/icons/update-symbolic.svg"),
+        ),
+        (
+            "io.github.hyprlab.Luxel.png",
+            include_bytes!("../../data/icons/io.github.hyprlab.Luxel-256.png"),
+        ),
+    ];
+    for (name, bytes) in bundled {
+        let _ = std::fs::write(icon_dir.join(name), bytes);
+    }
+    if let Some(display) = gtk::gdk::Display::default() {
+        gtk::IconTheme::for_display(&display).add_search_path(&icon_dir);
     }
 
     // Dark purple theme, dark-only (no light mode).
@@ -161,14 +209,19 @@ pub fn activate(app: &adw::Application) {
     let (event_tx, event_rx) = async_channel::unbounded::<Event>();
     let (lan_tx, lan_rx) = mpsc::channel();
     let (cloud_tx, cloud_rx) = mpsc::channel();
+    let (tuya_tx, tuya_rx) = mpsc::channel();
     lan::spawn(event_tx.clone(), lan_rx);
-    cloud::spawn(event_tx, cloud_rx);
+    cloud::spawn(event_tx.clone(), cloud_rx);
+    tuya::spawn(event_tx, tuya_rx);
 
     let config = Config::load();
     let _ = cloud_tx.send(CloudCommand::Configure {
         token: config.cloud_token.clone(),
         enabled: config.cloud_enabled,
     });
+    if !config.tuya_devices.is_empty() {
+        let _ = tuya_tx.send(TuyaCommand::Configure(config.tuya_devices.clone()));
+    }
     let subnets: Vec<Subnet> = config
         .lan_subnets
         .iter()
@@ -188,9 +241,16 @@ pub fn activate(app: &adw::Application) {
         .action_name("app.refresh")
         .build();
     header.pack_start(&refresh_btn);
+    // Primary menu per the GNOME HIG: sections, Settings then Keyboard
+    // Shortcuts, About last, no Quit item.
     let menu = gio::Menu::new();
-    menu.append(Some("_Preferences"), Some("app.preferences"));
-    menu.append(Some("_About Luxel"), Some("app.about"));
+    let menu_main = gio::Menu::new();
+    menu_main.append(Some("_Settings"), Some("app.preferences"));
+    menu_main.append(Some("_Keyboard Shortcuts"), Some("app.shortcuts"));
+    menu.append_section(None, &menu_main);
+    let menu_about = gio::Menu::new();
+    menu_about.append(Some("_About Luxel"), Some("app.about"));
+    menu.append_section(None, &menu_about);
     let menu_btn = gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
         .menu_model(&menu)
@@ -199,7 +259,7 @@ pub fn activate(app: &adw::Application) {
     header.pack_end(&menu_btn);
 
     // Cloud error banner
-    let banner = adw::Banner::builder().button_label("Preferences").build();
+    let banner = adw::Banner::builder().button_label("Settings").build();
     banner.connect_button_clicked(|_| {
         if let Some(app) = gio::Application::default() {
             app.activate_action("preferences", None);
@@ -214,7 +274,7 @@ pub fn activate(app: &adw::Application) {
         .halign(gtk::Align::Center)
         .build();
     let prefs_btn = gtk::Button::builder()
-        .label("Preferences…")
+        .label("Settings…")
         .action_name("app.preferences")
         .halign(gtk::Align::Center)
         .css_classes(["pill"])
@@ -230,7 +290,8 @@ pub fn activate(app: &adw::Application) {
         .description(
             "Make sure your LIFX bulbs are powered on and connected \
              to the same network as this computer. Bulbs on another \
-             subnet or the LIFX Cloud can be set up in Preferences.",
+             subnet, the LIFX Cloud, and SmartLife/Tuya smart plugs \
+             can be set up in Settings.",
         )
         .child(&empty_child)
         .build();
@@ -280,9 +341,10 @@ pub fn activate(app: &adw::Application) {
         .title("All Lights")
         .subtitle("Whole house")
         .build();
+    let house_spin = percent_spin(&house_scale.adjustment());
     house_row.add_suffix(&house_color_btn);
     house_row.add_suffix(&house_scale);
-    house_row.add_suffix(&percent_spin(&house_scale.adjustment()));
+    house_row.add_suffix(&house_spin);
     house_row.add_suffix(&house_switch);
     let house_list = gtk::ListBox::builder()
         .selection_mode(gtk::SelectionMode::None)
@@ -376,6 +438,8 @@ pub fn activate(app: &adw::Application) {
         h_house_switch: OnceCell::new(),
         house_scale: house_scale.clone(),
         h_house_scale: OnceCell::new(),
+        house_spin,
+        house_color_btn: house_color_btn.clone(),
         house_dot,
         house_dot_color,
         rooms_box,
@@ -385,6 +449,7 @@ pub fn activate(app: &adw::Application) {
         merged: RefCell::new(HashMap::new()),
         lan_tx,
         cloud_tx,
+        tuya_tx,
         config: RefCell::new(config),
     });
 
@@ -419,6 +484,7 @@ pub fn activate(app: &adw::Application) {
             move |_: &adw::Application, _, _| {
                 let _ = ui.lan_tx.send(LanCommand::Discover);
                 let _ = ui.cloud_tx.send(CloudCommand::Refresh);
+                let _ = ui.tuya_tx.send(TuyaCommand::Refresh);
             }
         })
         .build();
@@ -426,6 +492,12 @@ pub fn activate(app: &adw::Application) {
         .activate({
             let ui = ui.clone();
             move |_: &adw::Application, _, _| show_preferences(&ui)
+        })
+        .build();
+    let shortcuts = gio::ActionEntry::builder("shortcuts")
+        .activate({
+            let ui = ui.clone();
+            move |_: &adw::Application, _, _| show_shortcuts(&ui)
         })
         .build();
     let about = gio::ActionEntry::builder("about")
@@ -449,9 +521,18 @@ pub fn activate(app: &adw::Application) {
             move |_: &adw::Application, _, _| import_scenes_dialog(&ui)
         })
         .build();
-    app.add_action_entries([refresh, preferences, about, quit, export_scenes, import_scenes]);
+    app.add_action_entries([
+        refresh,
+        preferences,
+        shortcuts,
+        about,
+        quit,
+        export_scenes,
+        import_scenes,
+    ]);
     app.set_accels_for_action("app.refresh", &["<primary>r"]);
     app.set_accels_for_action("app.preferences", &["<primary>comma"]);
+    app.set_accels_for_action("app.shortcuts", &["<primary>question"]);
     app.set_accels_for_action("app.quit", &["<primary>q"]);
 
     // Hidden demo mode for screenshots: LUXEL_DEMO=1 populates sample
@@ -476,6 +557,18 @@ pub fn activate(app: &adw::Application) {
                         ui.banner.set_revealed(true);
                     }
                     Event::CloudError(None) => ui.banner.set_revealed(false),
+                    Event::TuyaFound { id, host, version } => {
+                        ui.tuya_found(&id, &host, &version);
+                    }
+                    Event::TuyaLocateDone { found } => {
+                        ui.toast(&match found {
+                            0 => "Network scan finished — no devices found. Check the \
+                                  subnet and that the devices are powered."
+                                .to_string(),
+                            1 => "Network scan finished — found 1 device".to_string(),
+                            n => format!("Network scan finished — found {n} devices"),
+                        });
+                    }
                 }
             }
         }
@@ -523,6 +616,11 @@ impl Ui {
                         m.state.group = fallback_group;
                     }
                 }
+            }
+            // Tuya ids are namespaced ("tuya:..."), so a Tuya device is never
+            // another view of a LIFX bulb: its backend is the only source.
+            Backend::Tuya => {
+                m.state = state;
             }
         }
         drop(map);
@@ -648,16 +746,23 @@ impl Ui {
         // The distinct colors of the lit bulbs in scope (sorted by bulb id
         // for stability, deduped, capped); empty means everything is off
         // and the chip renders gray.
+        // Plugs count toward the switch and the device tally but are left
+        // out of the brightness average and the color swatches.
         let summarize = |ids: &mut dyn Iterator<Item = &String>| {
             let mut any_on = false;
             let mut sum = 0.0;
             let mut count = 0usize;
+            let mut bulbs = 0usize;
             let mut lit: Vec<(&String, (f64, f64, f64))> = Vec::new();
             for id in ids {
                 let Some(m) = merged.get(id) else { continue };
                 any_on |= m.state.powered;
-                sum += m.state.color.brightness as f64 / 65535.0 * 100.0;
                 count += 1;
+                if m.state.kind == DeviceKind::Plug {
+                    continue;
+                }
+                sum += m.state.color.brightness as f64 / 65535.0 * 100.0;
+                bulbs += 1;
                 if m.state.powered {
                     lit.push((id, visible_rgb(&m.state.color)));
                 }
@@ -676,10 +781,10 @@ impl Ui {
                     colors.push(rgb);
                 }
             }
-            (any_on, sum, count, colors)
+            (any_on, sum, count, bulbs, colors)
         };
 
-        let (any_on, sum, count, colors) = summarize(&mut merged.keys());
+        let (any_on, sum, count, bulbs, colors) = summarize(&mut merged.keys());
         if count > 0 {
             if let Some(h) = self.h_house_switch.get() {
                 self.house_switch.block_signal(h);
@@ -687,16 +792,22 @@ impl Ui {
                 self.house_switch.unblock_signal(h);
             }
             if let Some(h) = self.h_house_scale.get() {
-                self.house_scale.block_signal(h);
-                self.house_scale.set_value(sum / count as f64);
-                self.house_scale.unblock_signal(h);
+                if bulbs > 0 {
+                    self.house_scale.block_signal(h);
+                    self.house_scale.set_value(sum / bulbs as f64);
+                    self.house_scale.unblock_signal(h);
+                }
             }
+            // Brightness and color make no sense when only plugs are around.
+            self.house_scale.set_visible(bulbs > 0);
+            self.house_spin.set_visible(bulbs > 0);
+            self.house_color_btn.set_visible(bulbs > 0);
             *self.house_dot_color.borrow_mut() = colors;
             self.house_dot.queue_draw();
         }
 
         for (name, section) in self.sections.borrow().iter() {
-            let (any_on, sum, count, colors) = summarize(
+            let (any_on, sum, count, bulbs, colors) = summarize(
                 &mut row_room
                     .iter()
                     .filter(|(_, room)| *room == name)
@@ -706,21 +817,35 @@ impl Ui {
                 section.switch.block_signal(&section.h_switch);
                 section.switch.set_active(any_on);
                 section.switch.unblock_signal(&section.h_switch);
-                section.scale.block_signal(&section.h_scale);
-                section.scale.set_value(sum / count as f64);
-                section.scale.unblock_signal(&section.h_scale);
+                if bulbs > 0 {
+                    section.scale.block_signal(&section.h_scale);
+                    section.scale.set_value(sum / bulbs as f64);
+                    section.scale.unblock_signal(&section.h_scale);
+                }
+                // A room holding only plugs keeps just its power switch.
+                section.scale.set_visible(bulbs > 0);
+                section.spin.set_visible(bulbs > 0);
+                section.color_btn.set_visible(bulbs > 0);
                 *section.dot_color.borrow_mut() = colors;
                 section.dot.queue_draw();
+                let noun = if bulbs == count { "light" } else { "device" };
                 section.header.set_subtitle(&if count == 1 {
-                    "1 light".to_string()
+                    format!("1 {noun}")
                 } else {
-                    format!("{count} lights")
+                    format!("{count} {noun}s")
                 });
             }
         }
     }
 
     fn route_power(&self, m: &Merged, on: bool) {
+        if m.state.backend == Backend::Tuya {
+            let _ = self.tuya_tx.send(TuyaCommand::SetPower {
+                id: m.state.id.clone(),
+                on,
+            });
+            return;
+        }
         if m.has_lan && m.lan_connected {
             if let Some(target) = m.lan_target {
                 let _ = self.lan_tx.send(LanCommand::SetPower { target, on });
@@ -738,6 +863,9 @@ impl Ui {
     }
 
     fn route_color(&self, m: &Merged, color: Hsbk, duration_ms: u32) {
+        if m.state.kind == DeviceKind::Plug {
+            return;
+        }
         if m.has_lan && m.lan_connected {
             if let Some(target) = m.lan_target {
                 let _ = self.lan_tx.send(LanCommand::SetColor {
@@ -785,6 +913,10 @@ impl Ui {
         let snapshot = {
             let mut merged = self.merged.borrow_mut();
             let Some(m) = merged.get_mut(id) else { return };
+            // Plugs have no color or brightness to adjust.
+            if m.state.kind == DeviceKind::Plug {
+                return;
+            }
             f(&mut m.state.color);
             m.clone()
         };
@@ -1044,6 +1176,63 @@ impl Ui {
         }
     }
 
+    /// A network scan identified a configured Tuya device: store its
+    /// address (and confirmed protocol version) and reconnect.
+    fn tuya_found(self: &Rc<Self>, id: &str, host: &str, version: &str) {
+        let name = {
+            let mut cfg = self.config.borrow_mut();
+            let Some(dev) = cfg.tuya_devices.iter_mut().find(|d| d.id.trim() == id) else {
+                return;
+            };
+            dev.host = host.to_string();
+            // The scan proved this version works, so pin it.
+            dev.version = version.to_string();
+            let name = if dev.name.trim().is_empty() {
+                host.to_string()
+            } else {
+                dev.name.clone()
+            };
+            cfg.save();
+            name
+        };
+        let devices = self.config.borrow().tuya_devices.clone();
+        let _ = self.tuya_tx.send(TuyaCommand::Configure(devices));
+        self.toast(&format!("Found “{name}” at {host}"));
+    }
+
+    /// Drop Tuya devices no longer present in the configuration.
+    fn purge_tuya(&self) {
+        let keep: Vec<String> = self
+            .config
+            .borrow()
+            .tuya_devices
+            .iter()
+            .filter(|d| d.is_complete())
+            .map(|d| format!("tuya:{}", d.id.trim()))
+            .collect();
+        let stale: Vec<String> = self
+            .merged
+            .borrow()
+            .keys()
+            .filter(|id| id.starts_with("tuya:") && !keep.contains(id))
+            .cloned()
+            .collect();
+        for id in &stale {
+            self.merged.borrow_mut().remove(id);
+            let row = self.rows.borrow_mut().remove(id);
+            let room = self.row_room.borrow_mut().remove(id);
+            if let (Some(row), Some(room)) = (row, room) {
+                self.remove_from_section(&room, &row.row);
+            }
+        }
+        if !stale.is_empty() {
+            self.refresh_headers();
+            if self.rows.borrow().is_empty() {
+                self.stack.set_visible_child_name("empty");
+            }
+        }
+    }
+
     /// Drop bulbs that are only known through the cloud (called when the
     /// user disables cloud control).
     fn purge_cloud(&self) {
@@ -1146,6 +1335,7 @@ fn color_popover(
         .adjustment(&kelvin_adj)
         .hexpand(true)
         .build();
+    disable_scroll(&kelvin);
     kelvin.add_mark(2700.0, gtk::PositionType::Bottom, None);
     kelvin.add_mark(4000.0, gtk::PositionType::Bottom, None);
     kelvin.add_mark(6500.0, gtk::PositionType::Bottom, None);
@@ -1221,6 +1411,7 @@ fn color_popover(
         .adjustment(&brightness_adj)
         .hexpand(true)
         .build();
+    disable_scroll(&brightness);
     let brightness_label = gtk::Label::builder()
         .label("Brightness")
         .halign(gtk::Align::Start)
@@ -1282,9 +1473,10 @@ fn new_room_section(room: &str, ui: &Rc<Ui>) -> RoomSection {
         .activatable(true)
         .tooltip_text("Show or hide this room's lights")
         .build();
+    let spin = percent_spin(&scale.adjustment());
     header.add_suffix(&color_btn);
     header.add_suffix(&scale);
-    header.add_suffix(&percent_spin(&scale.adjustment()));
+    header.add_suffix(&spin);
     header.add_suffix(&switch);
     header.connect_activated({
         let ui = ui.clone();
@@ -1357,6 +1549,8 @@ fn new_room_section(room: &str, ui: &Rc<Ui>) -> RoomSection {
         h_switch,
         scale,
         h_scale,
+        spin,
+        color_btn,
         dot,
         dot_color,
     }
@@ -1753,12 +1947,298 @@ fn show_preferences(ui: &Rc<Ui>) {
     group.add(&enable_row);
     group.add(&token_row);
 
+    // SmartLife / Tuya: the wizard in its own group, the configured
+    // devices (with an add row at the bottom) in a second one.
+    let tuya_group = adw::PreferencesGroup::builder()
+        .title("SmartLife / Tuya")
+        .description(
+            "Control Tuya-based smart plugs (SmartLife app) directly over \
+             the LAN. Tuya encrypts local control with a per-device secret \
+             from the Tuya cloud — the setup wizard walks you through \
+             getting the keys and finding the devices on your network.",
+        )
+        .build();
+    let wizard_row = adw::ActionRow::builder()
+        .title("Setup Wizard")
+        .subtitle("Fetch device keys from the Tuya cloud and find the devices on your network")
+        .activatable(true)
+        .build();
+    wizard_row.add_prefix(&gtk::Image::from_icon_name("preferences-other-symbolic"));
+    wizard_row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+    wizard_row.connect_activated({
+        let ui = ui.clone();
+        move |_| wizard::show_wizard(&ui)
+    });
+    tuya_group.add(&wizard_row);
+
+    let tuya_devices_group = adw::PreferencesGroup::builder()
+        .title("SmartLife Devices")
+        .build();
+    let tuya_add_row = adw::ActionRow::builder()
+        .title("Add Device Manually")
+        .activatable(true)
+        .build();
+    tuya_add_row.add_prefix(&gtk::Image::from_icon_name("list-add-symbolic"));
+    tuya_devices_group.add(&tuya_add_row);
+    let tuya_rows: Rc<RefCell<Vec<adw::ExpanderRow>>> = Rc::new(RefCell::new(Vec::new()));
+    rebuild_tuya_rows(ui, &tuya_devices_group, &tuya_rows, &tuya_add_row);
+    tuya_add_row.connect_activated({
+        let ui = ui.clone();
+        let group = tuya_devices_group.clone();
+        let rows = tuya_rows.clone();
+        move |row| {
+            {
+                let mut cfg = ui.config.borrow_mut();
+                cfg.tuya_devices.push(TuyaDevice::default());
+                cfg.save();
+            }
+            rebuild_tuya_rows(&ui, &group, &rows, row);
+            if let Some(last) = rows.borrow().last() {
+                last.set_expanded(true);
+            }
+        }
+    });
+
     let page = adw::PreferencesPage::new();
     page.add(&lan_group);
+    page.add(&tuya_group);
+    page.add(&tuya_devices_group);
     page.add(&group);
     let dialog = adw::PreferencesDialog::new();
+    dialog.set_title("Settings");
     dialog.add(&page);
     dialog.present(Some(&ui.window));
+}
+
+/// Push the configured Tuya devices to the backend thread and drop any rows
+/// for devices that no longer exist.
+fn push_tuya_config(ui: &Rc<Ui>) {
+    let devices = ui.config.borrow().tuya_devices.clone();
+    let _ = ui.tuya_tx.send(TuyaCommand::Configure(devices));
+    ui.purge_tuya();
+}
+
+type TuyaFieldSetter = Rc<dyn Fn(&mut TuyaDevice, String)>;
+
+/// The live status line for one configured device, from the merged state.
+fn tuya_status_text(ui: &Rc<Ui>, index: usize) -> String {
+    let Some(dev) = ui.config.borrow().tuya_devices.get(index).cloned() else {
+        return String::new();
+    };
+    tuya_status_for(ui, &dev)
+}
+
+fn tuya_status_for(ui: &Rc<Ui>, dev: &TuyaDevice) -> String {
+    if !dev.is_complete() {
+        let mut missing = Vec::new();
+        if dev.host.trim().is_empty() {
+            missing.push("IP address");
+        }
+        if dev.id.trim().is_empty() {
+            missing.push("device ID");
+        }
+        if dev.key.trim().len() != 16 {
+            missing.push("local key");
+        }
+        return format!("Waiting for: {}", missing.join(", "));
+    }
+    let id = format!("tuya:{}", dev.id.trim());
+    match ui.merged.borrow().get(&id) {
+        Some(m) if m.state.connected => "Connected".to_string(),
+        _ => "Connecting… (check IP, device ID and local key if this persists)".to_string(),
+    }
+}
+
+/// (Re)build the per-device expander rows of the Tuya devices group,
+/// keeping `add_row` as the last row. Fields save (and reach the backend)
+/// as they change, and a status row reports the connection state live.
+fn rebuild_tuya_rows(
+    ui: &Rc<Ui>,
+    group: &adw::PreferencesGroup,
+    rows: &Rc<RefCell<Vec<adw::ExpanderRow>>>,
+    add_row: &adw::ActionRow,
+) {
+    for row in rows.borrow_mut().drain(..) {
+        group.remove(&row);
+    }
+    group.remove(add_row);
+    let devices = ui.config.borrow().tuya_devices.clone();
+    for (i, dev) in devices.iter().enumerate() {
+        let row = adw::ExpanderRow::builder()
+            .title(glib::markup_escape_text(&if dev.name.trim().is_empty() {
+                "New Device".to_string()
+            } else {
+                dev.name.clone()
+            }))
+            .subtitle(glib::markup_escape_text(&dev.host))
+            .expanded(!dev.is_complete())
+            .build();
+
+        // A field entry that saves cfg.tuya_devices[i] as it changes.
+        let entry = |title: &str, text: &str, set: TuyaFieldSetter| {
+            let e = adw::EntryRow::builder().title(title).build();
+            e.set_text(text);
+            e.connect_changed({
+                let ui = ui.clone();
+                move |e| {
+                    e.remove_css_class("error");
+                    {
+                        let mut cfg = ui.config.borrow_mut();
+                        let Some(dev) = cfg.tuya_devices.get_mut(i) else {
+                            return;
+                        };
+                        set(dev, e.text().trim().to_string());
+                        cfg.save();
+                    }
+                    push_tuya_config(&ui);
+                }
+            });
+            e
+        };
+
+        let name_row = entry("Name", &dev.name, Rc::new(|d, v| d.name = v));
+        name_row.connect_changed({
+            let row = row.clone();
+            move |e| {
+                let text = e.text().trim().to_string();
+                row.set_title(&glib::markup_escape_text(&if text.is_empty() {
+                    "New Device".to_string()
+                } else {
+                    text
+                }));
+            }
+        });
+        row.add_row(&name_row);
+
+        let host_row = entry("IP address", &dev.host, Rc::new(|d, v| d.host = v));
+        host_row.connect_changed({
+            let row = row.clone();
+            move |e| {
+                let text = e.text().trim().to_string();
+                if !text.is_empty() && text.parse::<std::net::Ipv4Addr>().is_err() {
+                    e.add_css_class("error");
+                }
+                row.set_subtitle(&glib::markup_escape_text(&text));
+            }
+        });
+        row.add_row(&host_row);
+
+        row.add_row(&entry("Device ID", &dev.id, Rc::new(|d, v| d.id = v)));
+
+        // The local key is a secret, so use a password row (same pattern as
+        // the cloud token).
+        let key_row = adw::PasswordEntryRow::builder()
+            .title("Local key (16 characters)")
+            .build();
+        key_row.set_text(&dev.key);
+        key_row.connect_changed({
+            let ui = ui.clone();
+            move |e| {
+                let text = e.text().trim().to_string();
+                if !text.is_empty() && text.len() != 16 {
+                    e.add_css_class("error");
+                } else {
+                    e.remove_css_class("error");
+                }
+                {
+                    let mut cfg = ui.config.borrow_mut();
+                    let Some(dev) = cfg.tuya_devices.get_mut(i) else {
+                        return;
+                    };
+                    dev.key = text;
+                    cfg.save();
+                }
+                push_tuya_config(&ui);
+            }
+        });
+        row.add_row(&key_row);
+
+        // Live connection status, refreshed while the dialog is open.
+        let status_row = adw::ActionRow::builder()
+            .title("Status")
+            .subtitle(glib::markup_escape_text(&tuya_status_text(ui, i)))
+            .css_classes(["property"])
+            .build();
+        let seen_rooted = std::cell::Cell::new(false);
+        glib::timeout_add_local(Duration::from_millis(700), {
+            let ui = ui.clone();
+            let status_row = status_row.clone();
+            move || {
+                let rooted = status_row.root().is_some();
+                if seen_rooted.get() && !rooted {
+                    // Dialog closed or rows rebuilt: stop this timer.
+                    return glib::ControlFlow::Break;
+                }
+                seen_rooted.set(seen_rooted.get() || rooted);
+                status_row.set_subtitle(&glib::markup_escape_text(&tuya_status_text(&ui, i)));
+                glib::ControlFlow::Continue
+            }
+        });
+        row.add_row(&status_row);
+
+        let version_row = adw::ComboRow::builder()
+            .title("Protocol version")
+            .subtitle("Leave on Automatic unless detection fails")
+            .model(&gtk::StringList::new(&["Automatic", "3.3", "3.4", "3.5"]))
+            .build();
+        version_row.set_selected(match dev.version.as_str() {
+            "3.3" => 1,
+            "3.4" => 2,
+            "3.5" => 3,
+            _ => 0,
+        });
+        version_row.connect_selected_notify({
+            let ui = ui.clone();
+            move |combo| {
+                {
+                    let mut cfg = ui.config.borrow_mut();
+                    let Some(dev) = cfg.tuya_devices.get_mut(i) else {
+                        return;
+                    };
+                    dev.version = match combo.selected() {
+                        1 => "3.3",
+                        2 => "3.4",
+                        3 => "3.5",
+                        _ => "auto",
+                    }
+                    .to_string();
+                    cfg.save();
+                }
+                push_tuya_config(&ui);
+            }
+        });
+        row.add_row(&version_row);
+
+        let remove = gtk::Button::builder()
+            .icon_name("user-trash-symbolic")
+            .tooltip_text("Remove device")
+            .valign(gtk::Align::Center)
+            .css_classes(["flat", "circular"])
+            .build();
+        remove.connect_clicked({
+            let ui = ui.clone();
+            let group = group.clone();
+            let rows = rows.clone();
+            let add_row = add_row.clone();
+            move |_| {
+                {
+                    let mut cfg = ui.config.borrow_mut();
+                    if i < cfg.tuya_devices.len() {
+                        cfg.tuya_devices.remove(i);
+                    }
+                    cfg.save();
+                }
+                push_tuya_config(&ui);
+                rebuild_tuya_rows(&ui, &group, &rows, &add_row);
+            }
+        });
+        row.add_suffix(&remove);
+
+        group.add(&row);
+        rows.borrow_mut().push(row);
+    }
+    // The add row always comes after the device list.
+    group.add(add_row);
 }
 
 /// Inject sample bulbs and scenes for screenshots (LUXEL_DEMO).
@@ -1785,6 +2265,7 @@ fn demo_populate(ui: &Rc<Ui>) {
         ui.upsert(BulbState {
             id: id.to_string(),
             backend: Backend::Lan,
+            kind: DeviceKind::Bulb,
             label: label.to_string(),
             group: Some(room.to_string()),
             powered: *powered,
@@ -1793,6 +2274,18 @@ fn demo_populate(ui: &Rc<Ui>) {
             lan_target: None,
         });
     }
+    // A SmartLife/Tuya smart plug, to show the power-only row.
+    ui.upsert(BulbState {
+        id: "tuya:demo0123456789abcdefg".to_string(),
+        backend: Backend::Tuya,
+        kind: DeviceKind::Plug,
+        label: "Fan".to_string(),
+        group: Some("Office".to_string()),
+        powered: true,
+        color: Hsbk::default(),
+        connected: true,
+        lan_target: None,
+    });
     {
         let mut cfg = ui.config.borrow_mut();
         let scene = |name: &str, entries: &[(&str, bool, Hsbk)]| Scene {
@@ -1827,6 +2320,40 @@ fn demo_populate(ui: &Rc<Ui>) {
         ];
     }
     ui.rebuild_scenes();
+}
+
+/// A plain shortcuts list (deliberately no search — four shortcuts don't
+/// need one, and AdwShortcutsDialog can't hide its search UI).
+fn show_shortcuts(ui: &Rc<Ui>) {
+    let list = gtk::ListBox::builder()
+        .selection_mode(gtk::SelectionMode::None)
+        .css_classes(["boxed-list"])
+        .margin_top(12)
+        .margin_bottom(24)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+    for (title, accel) in [
+        ("Rescan for Lights", "<primary>r"),
+        ("Settings", "<primary>comma"),
+        ("Keyboard Shortcuts", "<primary>question"),
+        ("Quit", "<primary>q"),
+    ] {
+        let row = adw::ActionRow::builder().title(title).build();
+        let label = gtk::ShortcutLabel::new(accel);
+        label.set_valign(gtk::Align::Center);
+        row.add_suffix(&label);
+        list.append(&row);
+    }
+    let tv = adw::ToolbarView::new();
+    tv.add_top_bar(&adw::HeaderBar::new());
+    tv.set_content(Some(&list));
+    adw::Dialog::builder()
+        .title("Keyboard Shortcuts")
+        .content_width(360)
+        .child(&tv)
+        .build()
+        .present(Some(&ui.window));
 }
 
 fn open_uri(uri: &str) {
@@ -1876,7 +2403,8 @@ fn show_about(ui: &Rc<Ui>) {
     page.append(&version);
 
     let desc = gtk::Label::new(Some(
-        "Control LIFX smart bulbs from your desktop — locally, no cloud required.",
+        "Control LIFX smart bulbs and SmartLife devices from your desktop — \
+         locally, no cloud required.",
     ));
     desc.set_wrap(true);
     desc.set_justify(gtk::Justification::Center);
@@ -1937,6 +2465,11 @@ fn show_about(ui: &Rc<Ui>) {
         row.connect_activated(move |_| open_uri(&url));
         row
     };
+    links.append(&mk_row("Website", "https://luxel.hyprlab.co"));
+    links.append(&mk_row(
+        "GitHub — Submit bug report or feature request",
+        "https://github.com/hyprlab/luxel/issues",
+    ));
     links.append(&mk_row("Contact — hyprlab@proton.me", "mailto:hyprlab@proton.me"));
     links.append(&mk_row("Source Code", "https://github.com/hyprlab/luxel"));
     links.append(&mk_row(

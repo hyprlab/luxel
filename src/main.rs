@@ -2,6 +2,7 @@ mod cloud;
 mod config;
 mod lan;
 mod model;
+mod tuya;
 mod ui;
 
 use gtk::glib;

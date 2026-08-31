@@ -4,7 +4,7 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-or-later</project_license>
   <name>Luxel</name>
-  <summary>Control LIFX smart bulbs from your desktop</summary>
+  <summary>Control LIFX smart bulbs and SmartLife devices from your desktop</summary>
   <description>
     <p>
       Luxel discovers LIFX smart bulbs on your local network and lets you
@@ -22,7 +22,7 @@
   <developer id="io.github.hyprlab">
     <name>Hyprlab</name>
   </developer>
-  <url type="homepage">https://github.com/hyprlab/luxel</url>
+  <url type="homepage">https://luxel.hyprlab.co</url>
   <url type="bugtracker">https://github.com/hyprlab/luxel/issues</url>
   <url type="vcs-browser">https://github.com/hyprlab/luxel</url>
   <update_contact>hyprlab@proton.me</update_contact>
@@ -33,6 +33,11 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="1.2.0" date="2026-08-31">
+      <description>
+        <p>SmartLife/Tuya smart plug support with fully local control, a guided setup wizard that fetches device keys from the Tuya cloud and finds devices on the network, a Settings redesign, a HIG-aligned menu with a keyboard shortcuts dialog, and a refreshed icon.</p>
+      </description>
+    </release>
     <release version="0.1.2" date="2026-08-02">
       <description>
         <p>Scenes can now be exported to a file and imported back.</p>

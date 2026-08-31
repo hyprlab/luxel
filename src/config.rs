@@ -29,6 +29,45 @@ pub struct ScenesFile {
     pub scenes: Vec<Scene>,
 }
 
+/// One SmartLife/Tuya device controlled over the LAN. Tuya's local protocol
+/// encrypts every exchange with a per-device key that only the Tuya cloud
+/// knows, so unlike LIFX bulbs these must be configured by hand.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct TuyaDevice {
+    /// Display name shown in the lights list.
+    pub name: String,
+    /// IP address (Tuya devices are probed by unicast, so cross-subnet works).
+    pub host: String,
+    /// Tuya device id (20+ characters, from the Tuya cloud / tinytuya wizard).
+    pub id: String,
+    /// Per-device local key (16 characters, from the Tuya cloud).
+    pub key: String,
+    /// Protocol version: "auto", "3.3", "3.4" or "3.5".
+    pub version: String,
+}
+
+impl Default for TuyaDevice {
+    fn default() -> Self {
+        TuyaDevice {
+            name: String::new(),
+            host: String::new(),
+            id: String::new(),
+            key: String::new(),
+            version: "auto".to_string(),
+        }
+    }
+}
+
+impl TuyaDevice {
+    /// A device can only be reached once all connection fields are set.
+    pub fn is_complete(&self) -> bool {
+        !self.host.trim().is_empty()
+            && !self.id.trim().is_empty()
+            && self.key.trim().len() == 16
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -43,6 +82,14 @@ pub struct Config {
     pub scenes: Vec<Scene>,
     /// Rooms whose bulb list is collapsed in the Lights view.
     pub collapsed_rooms: Vec<String>,
+    /// SmartLife/Tuya devices controlled over the LAN.
+    pub tuya_devices: Vec<TuyaDevice>,
+    /// Tuya Cloud API credentials (used only by the setup wizard to fetch
+    /// device local keys; day-to-day control never touches the cloud).
+    pub tuya_api_id: String,
+    pub tuya_api_secret: String,
+    /// Data center region code ("us", "eu", …); empty until chosen.
+    pub tuya_api_region: String,
 }
 
 fn config_path() -> PathBuf {

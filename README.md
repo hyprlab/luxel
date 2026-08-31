@@ -15,12 +15,12 @@ from the Linux desktop — no phone required.
   millisecond latency.
 - **Isolated IoT networks supported** — if your bulbs live on a separate
   subnet/VLAN where broadcast discovery can't reach them, list their subnets
-  in Preferences (e.g. `192.168.20.0/24`). Each configured subnet gets a
+  in Settings (e.g. `192.168.20.0/24`). Each configured subnet gets a
   directed-broadcast probe plus a unicast sweep of every host address (up to
   a /22), which routes across VLANs. Your router's firewall must allow
   traffic from this machine to the IoT network on UDP port 56700.
 - **Optional LIFX Cloud support** — add a personal access token
-  (from <https://cloud.lifx.com/settings>) in Preferences to list and control
+  (from <https://cloud.lifx.com/settings>) in Settings to list and control
   lights through the cloud, e.g. when you're on a different network. When a
   bulb is reachable both ways, local control is always preferred.
 - **Rooms** — bulbs are grouped into room sections (from their LIFX group by
@@ -28,6 +28,22 @@ from the Linux desktop — no phone required.
   Every room header has a color button (wheel + warmth popover), power
   switch, and brightness slider, and an "All Lights" row applies the same
   controls to the whole house at once.
+- **SmartLife/Tuya smart plugs** — plugs that use the Tuya local protocol
+  (SmartLife app) are controlled locally over TCP port 6668, including
+  across subnets/VLANs. Tuya encrypts local control with a per-device
+  *local key* that has to be fetched once from the Tuya cloud; the
+  built-in **SmartLife Setup wizard** (in Settings) walks through the whole
+  process — Tuya developer account, linking the SmartLife app, then
+  fetching every device's ID and local key straight from the Tuya Cloud
+  API in-app (no terminal needed; importing a
+  [tinytuya](https://github.com/jasonacox/tinytuya) `devices.json` remains
+  as a fallback) and locating the devices on your network automatically
+  (each device is identified by its own key, so the scan works across
+  routed subnets where broadcasts can't). Protocol versions 3.3, 3.4 and
+  3.5 are supported with automatic detection. Plugs show a power switch
+  (no color controls), join rooms and scenes, and count into the room and
+  All Lights switches. Devices can also be entered by hand in
+  Settings.
 - **Scenes** — save the current state of your lights under a name and restore
   it with one click, choosing exactly which lights each scene includes.
   Scenes are stored locally, so they work without any cloud account.
@@ -44,7 +60,8 @@ from the Linux desktop — no phone required.
 | Action | Shortcut |
 | --- | --- |
 | Rescan for lights | Ctrl+R |
-| Preferences | Ctrl+, |
+| Settings | Ctrl+, |
+| Keyboard shortcuts | Ctrl+? |
 | Quit | Ctrl+Q |
 
 ## Building
@@ -107,7 +124,7 @@ Luxel is built by a human maintainer working with generative AI as a development
 
 - **Code** — the large majority of the Rust code in this repository was written with Anthropic's Claude (via Claude Code), working from the maintainer's direction. The maintainer decides what gets built, reviews the results, tests every release, and signs off on everything that ships.
 - **Text** — documentation, release notes, and in-app copy are largely AI-drafted and human-edited.
-- **The app itself contains no AI.** Luxel has no AI features and makes no requests to AI services — it talks only to your LIFX bulbs on your local network. AI was used to *build* the app, not to run it.
+- **The app itself contains no AI.** Luxel has no AI features and makes no requests to AI services — it talks only to your lights and smart plugs on your local network (plus the optional LIFX/Tuya cloud endpoints you configure). AI was used to *build* the app, not to run it.
 
 Bug reports and pull requests are welcome from humans and their AI tools alike; everything merged gets the same human review.
 

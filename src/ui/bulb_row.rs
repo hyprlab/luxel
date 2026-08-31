@@ -4,10 +4,11 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::glib::{self, SignalHandlerId};
 
+use crate::model::{Backend, DeviceKind};
 use crate::ui::color_wheel::ColorWheel;
 use crate::ui::util::{
-    color_dot, format_hex, hsv_to_rgb, parse_hex, rgb_to_hsv, visible_rgb, SharedColors,
-    Throttler,
+    color_dot, disable_scroll, format_hex, hsv_to_rgb, parse_hex, rgb_to_hsv, visible_rgb,
+    SharedColors, Throttler,
 };
 use crate::ui::{Merged, Ui};
 
@@ -17,6 +18,7 @@ pub struct BulbRow {
     pub row: adw::ExpanderRow,
     power: gtk::Switch,
     brightness: gtk::Scale,
+    bri_row: adw::ActionRow,
     kelvin: gtk::Scale,
     kelvin_row: adw::ActionRow,
     wheel: ColorWheel,
@@ -24,9 +26,12 @@ pub struct BulbRow {
     hex_row: adw::EntryRow,
     colors_btn: gtk::ToggleButton,
     whites_btn: gtk::ToggleButton,
+    mode_row: gtk::ListBoxRow,
     room_row: adw::EntryRow,
     dot: gtk::DrawingArea,
     dot_color: SharedColors,
+    /// ON/OFF pill shown instead of the color dot on plug rows.
+    plug_chip: gtk::Label,
     /// Last non-zero saturation, restored when toggling back to Colors.
     last_sat: Rc<Cell<u16>>,
     h_power: SignalHandlerId,
@@ -40,9 +45,18 @@ impl BulbRow {
     pub fn new(id: String, ui: Rc<Ui>) -> BulbRow {
         let row = adw::ExpanderRow::builder().show_enable_switch(false).build();
 
-        // Colored dot showing the bulb's current color.
+        // Colored dot showing the bulb's current color; plugs show an
+        // ON/OFF chip instead (swapped in apply()).
         let (dot, dot_color) = color_dot(45);
         row.add_prefix(&dot);
+        let plug_chip = gtk::Label::builder()
+            .label("OFF")
+            .width_chars(3)
+            .valign(gtk::Align::Center)
+            .css_classes(["plug-chip", "off"])
+            .visible(false)
+            .build();
+        row.add_prefix(&plug_chip);
 
         let power = gtk::Switch::builder().valign(gtk::Align::Center).build();
         row.add_suffix(&power);
@@ -136,6 +150,7 @@ impl BulbRow {
             .adjustment(&kelvin_adj)
             .valign(gtk::Align::Center)
             .build();
+        disable_scroll(&kelvin);
         kelvin.set_size_request(150, -1);
         kelvin.add_mark(2700.0, gtk::PositionType::Bottom, None);
         kelvin.add_mark(4000.0, gtk::PositionType::Bottom, None);
@@ -259,6 +274,7 @@ impl BulbRow {
             row,
             power,
             brightness,
+            bri_row,
             kelvin,
             kelvin_row,
             wheel,
@@ -266,9 +282,11 @@ impl BulbRow {
             hex_row,
             colors_btn,
             whites_btn,
+            mode_row,
             room_row,
             dot,
             dot_color,
+            plug_chip,
             last_sat,
             h_power,
             h_brightness,
@@ -282,9 +300,11 @@ impl BulbRow {
     /// user-input signal handlers.
     pub fn apply(&self, m: &Merged, room: &str) {
         let s = &m.state;
+        let plug = s.kind == DeviceKind::Plug;
         self.row.set_title(&glib::markup_escape_text(&s.label));
 
-        let via_lan = m.has_lan && m.lan_connected;
+        let via_lan =
+            (m.has_lan && m.lan_connected) || (s.backend == Backend::Tuya && s.connected);
         let reachable = via_lan || (m.has_cloud && s.connected);
         let subtitle = if via_lan {
             "Local"
@@ -299,6 +319,36 @@ impl BulbRow {
         self.power.block_signal(&self.h_power);
         self.power.set_active(s.powered);
         self.power.unblock_signal(&self.h_power);
+
+        // Plugs are on/off only: show just the power switch and the Room
+        // field, none of the color machinery, and an ON/OFF chip in place
+        // of the color dot.
+        self.mode_row.set_visible(!plug);
+        self.bri_row.set_visible(!plug);
+        self.dot.set_visible(!plug);
+        self.plug_chip.set_visible(plug);
+        if plug {
+            self.wheel_row.set_visible(false);
+            self.hex_row.set_visible(false);
+            self.kelvin_row.set_visible(false);
+
+            let focused = self
+                .room_row
+                .state_flags()
+                .contains(gtk::StateFlags::FOCUS_WITHIN);
+            if !focused && self.room_row.text() != room {
+                self.room_row.set_text(room);
+            }
+
+            let on = s.powered && reachable;
+            self.plug_chip.set_label(if on { "ON" } else { "OFF" });
+            if on {
+                self.plug_chip.remove_css_class("off");
+            } else {
+                self.plug_chip.add_css_class("off");
+            }
+            return;
+        }
 
         self.brightness.block_signal(&self.h_brightness);
         self.brightness
@@ -370,5 +420,6 @@ fn make_scale(min: f64, max: f64) -> gtk::Scale {
     let scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, min, max, 1.0);
     scale.set_size_request(150, -1);
     scale.set_valign(gtk::Align::Center);
+    disable_scroll(&scale);
     scale
 }
