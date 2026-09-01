@@ -4,8 +4,8 @@ A native GNOME app (Rust + GTK4 + libadwaita) for controlling LIFX smart bulbs
 from the Linux desktop — no phone required.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Luxel — Lights view" width="420">
-  <img src="docs/screenshot-scenes.png" alt="Luxel — Scenes view" width="420">
+  <img src="docs/screenshot.png" alt="Luxel — Lights view with rooms, color chips, and SmartLife devices" width="420">
+  <img src="docs/screenshot-color.png" alt="Luxel — a room's inline color panel with the hue wheel open" width="420">
 </p>
 
 ## Features
