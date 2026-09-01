@@ -114,7 +114,6 @@ impl Throttler {
     }
 }
 
-/// The color a bulb visually shows at full value (ignoring brightness).
 /// Strip a scale's built-in scroll controller: wheeling through the page
 /// must scroll the page, not tweak whatever slider the pointer crosses.
 pub fn disable_scroll(scale: &gtk::Scale) {
@@ -127,6 +126,7 @@ pub fn disable_scroll(scale: &gtk::Scale) {
     }
 }
 
+/// The color a bulb visually shows at full value (ignoring brightness).
 pub fn visible_rgb(c: &crate::model::Hsbk) -> (f64, f64, f64) {
     if c.saturation == 0 {
         kelvin_to_rgb(c.kelvin)
@@ -158,13 +158,48 @@ fn chip_radius(h: f64) -> f64 {
     (h * 0.4).min(12.0)
 }
 
-/// Fill a chip: gray when empty, solid for one color, and a horizontal
-/// linear gradient blending through the colors when there are several.
-fn paint_chip(cr: &gtk::cairo::Context, w: f64, h: f64, colors: &[(f64, f64, f64)]) {
+/// Fill a chip: gray when empty, solid for one color, and a gradient
+/// blending the colors when there are several — a 2D mesh blend for
+/// room/house chips, or a horizontal linear one (scene chips).
+fn paint_chip(cr: &gtk::cairo::Context, w: f64, h: f64, colors: &[(f64, f64, f64)], mesh: bool) {
     rounded_rect(cr, 1.5, 1.5, w, h, chip_radius(h));
     match colors {
         [] => cr.set_source_rgb(0.45, 0.45, 0.45),
         [(r, g, b)] => cr.set_source_rgb(*r, *g, *b),
+        _ if mesh => {
+            // One Coons patch spanning the chip, with a color in each
+            // corner: cairo interpolates smoothly across the surface.
+            // Up to four colors go to the corners directly (cycling when
+            // fewer); a longer list is sampled evenly so its whole range
+            // still shows.
+            let corner = |i: usize| {
+                if colors.len() <= 4 {
+                    colors[i % colors.len()]
+                } else {
+                    colors[(i * (colors.len() - 1)) / 3]
+                }
+            };
+            let pattern = gtk::cairo::Mesh::new();
+            pattern.begin_patch();
+            pattern.move_to(1.5, 1.5);
+            pattern.line_to(1.5 + w, 1.5);
+            pattern.line_to(1.5 + w, 1.5 + h);
+            pattern.line_to(1.5, 1.5 + h);
+            for (i, mesh_corner) in [
+                gtk::cairo::MeshCorner::MeshCorner0,
+                gtk::cairo::MeshCorner::MeshCorner1,
+                gtk::cairo::MeshCorner::MeshCorner2,
+                gtk::cairo::MeshCorner::MeshCorner3,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let (r, g, b) = corner(i);
+                pattern.set_corner_color_rgb(mesh_corner, r, g, b);
+            }
+            pattern.end_patch();
+            let _ = cr.set_source(&pattern);
+        }
         _ => {
             let gradient = gtk::cairo::LinearGradient::new(1.5, 0.0, 1.5 + w, 0.0);
             let last = (colors.len() - 1) as f64;
@@ -193,7 +228,7 @@ pub fn color_dot(width: i32) -> (gtk::DrawingArea, SharedColors) {
         .build();
     let draw_colors = colors.clone();
     dot.set_draw_func(move |_, cr, w, h| {
-        paint_chip(cr, w as f64 - 3.0, h as f64 - 3.0, &draw_colors.borrow());
+        paint_chip(cr, w as f64 - 3.0, h as f64 - 3.0, &draw_colors.borrow(), true);
     });
     (dot, colors)
 }
@@ -276,7 +311,7 @@ pub fn scene_chip(width: i32, colors: &[(f64, f64, f64)]) -> gtk::DrawingArea {
         .valign(gtk::Align::Center)
         .build();
     chip.set_draw_func(move |_, cr, w, h| {
-        paint_chip(cr, w as f64 - 3.0, h as f64 - 3.0, &colors);
+        paint_chip(cr, w as f64 - 3.0, h as f64 - 3.0, &colors, false);
     });
     chip
 }
