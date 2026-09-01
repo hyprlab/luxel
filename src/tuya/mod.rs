@@ -59,6 +59,8 @@ struct Device {
     probe_idx: usize,
     /// The boolean data point that is this device's power switch.
     switch_dp: Option<String>,
+    /// Latest data points reported by the device, for the Details dialog.
+    last_dps: serde_json::Map<String, serde_json::Value>,
     powered: bool,
     connected: bool,
     last_ok: Instant,
@@ -75,6 +77,7 @@ impl Device {
             conn: None,
             probe_idx: 0,
             switch_dp: None,
+            last_dps: serde_json::Map::new(),
             powered: false,
             connected: false,
             last_ok: now,
@@ -120,6 +123,43 @@ fn epoch() -> u64 {
 }
 
 fn emit(events: &async_channel::Sender<Event>, dev: &Device) {
+    let mut details = vec![
+        ("Device ID".to_string(), dev.cfg.id.trim().to_string()),
+        (
+            "IP address".to_string(),
+            format!("{}:6668", dev.cfg.host.trim()),
+        ),
+        (
+            "Protocol".to_string(),
+            dev.version
+                .map(|v| format!("Tuya {}", v.as_str()))
+                .unwrap_or_else(|| "Tuya (detecting…)".to_string()),
+        ),
+    ];
+    if let Some(dp) = &dev.switch_dp {
+        details.push(("Switch data point".to_string(), dp.clone()));
+    }
+    // Raw data points straight from the device, numerically ordered. A few
+    // internal/vendor bookkeeping points add noise, so they're hidden; the
+    // switch data point reads as a friendly ON/OFF state line.
+    const HIDDEN_DPS: [&str; 4] = ["11", "101", "102", "103"];
+    let mut dps: Vec<(&String, &serde_json::Value)> = dev.last_dps.iter().collect();
+    dps.sort_by_key(|(k, _)| k.parse::<u32>().unwrap_or(u32::MAX));
+    for (k, v) in dps {
+        if HIDDEN_DPS.contains(&k.as_str()) {
+            continue;
+        }
+        if Some(k) == dev.switch_dp.as_ref() {
+            let value = match v.as_bool() {
+                Some(true) => "ON".to_string(),
+                Some(false) => "OFF".to_string(),
+                None => v.to_string(),
+            };
+            details.push((format!("State (Data point {k})"), value));
+        } else {
+            details.push((format!("Data point {k}"), v.to_string()));
+        }
+    }
     let _ = events.send_blocking(Event::Upsert(BulbState {
         id: format!("tuya:{}", dev.cfg.id.trim()),
         backend: Backend::Tuya,
@@ -130,6 +170,7 @@ fn emit(events: &async_channel::Sender<Event>, dev: &Device) {
         color: Hsbk::default(),
         connected: dev.connected,
         lan_target: None,
+        details,
     }));
 }
 
@@ -546,6 +587,14 @@ fn handle_msg(events: &async_channel::Sender<Event>, dev: &mut Device, msg: prot
         if dev.switch_dp.is_none() {
             dev.switch_dp = pick_switch_dp(dps);
         }
+        // Merge (status pushes may carry only the changed data points).
+        let dps_changed = dps
+            .iter()
+            .any(|(k, v)| dev.last_dps.get(k) != Some(v));
+        for (k, v) in dps {
+            dev.last_dps.insert(k.clone(), v.clone());
+        }
+        changed |= dps_changed;
         if Instant::now() >= dev.suppress_until {
             if let Some(on) = dev
                 .switch_dp

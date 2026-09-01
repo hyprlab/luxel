@@ -57,6 +57,42 @@ impl BulbRow {
             .build();
         row.add_prefix(&plug_chip);
 
+        // Device-details popover, opened from an info button in the row
+        // header just left of the power switch.
+        let info_content = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(8)
+            .margin_top(10)
+            .margin_bottom(10)
+            .margin_start(12)
+            .margin_end(12)
+            .width_request(230)
+            .build();
+        let info_popover = gtk::Popover::builder().child(&info_content).build();
+        info_popover.connect_show({
+            let ui = ui.clone();
+            let id = id.clone();
+            let info_content = info_content.clone();
+            move |_| ui.populate_device_info(&id, &info_content)
+        });
+        // The popover's initial focus lands on the first selectable label
+        // and auto-selects its text; clear that right after it settles.
+        info_popover.connect_map({
+            let info_content = info_content.clone();
+            move |_| {
+                let info_content = info_content.clone();
+                glib::idle_add_local_once(move || clear_label_selections(&info_content));
+            }
+        });
+        let info_btn = gtk::MenuButton::builder()
+            .icon_name("info-outline-symbolic")
+            .tooltip_text("Device details")
+            .valign(gtk::Align::Center)
+            .css_classes(["flat"])
+            .popover(&info_popover)
+            .build();
+        row.add_suffix(&info_btn);
+
         let power = gtk::Switch::builder().valign(gtk::Align::Center).build();
         row.add_suffix(&power);
         let h_power = power.connect_active_notify({
@@ -333,7 +369,8 @@ impl BulbRow {
 
         // Plugs are on/off only: show just the power switch and the Room
         // field, none of the color machinery, and an ON/OFF chip in place
-        // of the color dot.
+        // of the color dot. The info button lives in the header, so it
+        // stays available either way.
         self.mode_row.set_visible(!plug);
         self.bri_row.set_visible(!plug);
         self.dot.set_visible(!plug);
@@ -424,6 +461,25 @@ impl BulbRow {
         };
         *self.dot_color.borrow_mut() = vec![dot_rgb];
         self.dot.queue_draw();
+    }
+}
+
+/// Clear the text selection on every label inside `container` (a popover's
+/// initial focus otherwise select-alls the first selectable label).
+fn clear_label_selections(container: &gtk::Box) {
+    let mut child = container.first_child();
+    while let Some(item) = child {
+        if let Some(label) = item.downcast_ref::<gtk::Label>() {
+            label.select_region(0, 0);
+        }
+        let mut inner = item.first_child();
+        while let Some(widget) = inner {
+            if let Some(label) = widget.downcast_ref::<gtk::Label>() {
+                label.select_region(0, 0);
+            }
+            inner = widget.next_sibling();
+        }
+        child = item.next_sibling();
     }
 }
 

@@ -29,6 +29,10 @@ struct Device {
     color: Option<Hsbk>,
     powered: bool,
     connected: bool,
+    /// (vendor id, product id) from StateVersion.
+    version: Option<(u32, u32)>,
+    /// (major, minor) from StateHostFirmware.
+    firmware: Option<(u16, u16)>,
     last_seen: Instant,
     suppress_until: Instant,
 }
@@ -91,6 +95,12 @@ fn run(
                 send(&socket, Some(*target), dev.addr, Message::LightGet, true);
                 if dev.group.is_none() {
                     send(&socket, Some(*target), dev.addr, Message::GetGroup, true);
+                }
+                if dev.version.is_none() {
+                    send(&socket, Some(*target), dev.addr, Message::GetVersion, true);
+                }
+                if dev.firmware.is_none() {
+                    send(&socket, Some(*target), dev.addr, Message::GetHostFirmware, true);
                 }
                 if dev.connected && dev.last_seen.elapsed() > OFFLINE_AFTER {
                     dev.connected = false;
@@ -199,6 +209,8 @@ fn handle_packet(
                 color: None,
                 powered: false,
                 connected: false,
+                version: None,
+                firmware: None,
                 last_seen: Instant::now(),
                 suppress_until: Instant::now(),
             });
@@ -246,8 +258,55 @@ fn handle_packet(
                 emit(events, target, dev);
             }
         }
+        Message::StateVersion {
+            vendor, product, ..
+        } => {
+            if let Some(dev) = devices.get_mut(&target) {
+                dev.last_seen = Instant::now();
+                dev.version = Some((vendor, product));
+                emit(events, target, dev);
+            }
+        }
+        Message::StateHostFirmware {
+            version_major,
+            version_minor,
+            ..
+        } => {
+            if let Some(dev) = devices.get_mut(&target) {
+                dev.last_seen = Instant::now();
+                dev.firmware = Some((version_major, version_minor));
+                emit(events, target, dev);
+            }
+        }
         _ => {}
     }
+}
+
+/// Vendor/device facts shown in the Details dialog. A LIFX serial doubles
+/// as the bulb's MAC address.
+fn details(target: u64, dev: &Device) -> Vec<(String, String)> {
+    let b = target.to_le_bytes();
+    let mut out = vec![
+        ("Serial".to_string(), serial_hex(target)),
+        (
+            "MAC address".to_string(),
+            format!(
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                b[0], b[1], b[2], b[3], b[4], b[5]
+            ),
+        ),
+        ("IP address".to_string(), dev.addr.to_string()),
+    ];
+    if let Some((vendor, product)) = dev.version {
+        let name = lifx_core::get_product_info(vendor, product)
+            .map(|p| p.name.to_string())
+            .unwrap_or_else(|| format!("Vendor {vendor} · Product {product}"));
+        out.push(("Product".to_string(), name));
+    }
+    if let Some((major, minor)) = dev.firmware {
+        out.push(("Firmware".to_string(), format!("{major}.{minor}")));
+    }
+    out
 }
 
 fn emit(events: &async_channel::Sender<Event>, target: u64, dev: &Device) {
@@ -264,6 +323,7 @@ fn emit(events: &async_channel::Sender<Event>, target: u64, dev: &Device) {
         color,
         connected: dev.connected,
         lan_target: Some(target),
+        details: details(target, dev),
     }));
 }
 
