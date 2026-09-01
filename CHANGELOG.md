@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2 — 2026-09-01
+- Room and All Lights color controls now slide down inline inside the room card (Colors/Whites panel on the header's color chip toggle) instead of opening a popover overlay.
+- Device details popover: an info button beside each row's power switch shows locally sourced facts — LIFX serial/MAC/IP, product name and firmware; SmartLife device ID, address, protocol version, an ON/OFF state line, and the device's remaining raw data points (noise DPs hidden). Values are selectable for copying.
+- Per-device subtitles show the connection and vendor (e.g. "Local · LIFX", "Cloud · SmartLife"); a new Settings → Interface switch hides them, except for offline devices which always say so. Room counts and the All Lights subtitle are unaffected.
+- Room and All Lights color chips blend multiple colors with a 2D mesh gradient (cairo Coons patch) instead of a linear stripe.
+- Sizing polish: 528px default window width with a 524px floor, 64px 3:2 color chips and matching plug ON/OFF pills.
+
 ## 1.2.0 — 2026-08-31
 - The primary menu now follows the GNOME HIG: sectioned, ordered Settings → Keyboard Shortcuts → About Luxel. A standard Keyboard Shortcuts dialog (Ctrl+?) lists all shortcuts (libadwaita 1.8 ShortcutsDialog; the adw feature level moved from v1_5 to v1_8).
 - Preferences is now called Settings throughout the app.

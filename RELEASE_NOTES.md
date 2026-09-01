@@ -1,6 +1,12 @@
 # Luxel
 
-## What's new in 1.2.0
+## What's new in 1.2.2
+- Room and All Lights color controls now slide down inside the card — no more floating overlay.
+- A new info button next to each device's power switch pops over the device's details: MAC address, IP, product and firmware for LIFX; device ID, protocol, state, and raw data points for SmartLife plugs. Everything is copyable.
+- Each light's subtitle shows how it's connected and by which vendor (e.g. "Local · LIFX") — switchable off in Settings → Interface, though offline devices always say so.
+- Room color chips blend multiple colors as a smooth 2D mesh instead of a stripe, and the window and chips got a sizing polish.
+
+## In 1.2.0
 - SmartLife/Tuya smart plug support: plugs are controlled entirely over your local network (works across subnets and VLANs), show a power switch in the lights list, join rooms and scenes, and count into the room and All Lights switches.
 - A guided SmartLife Setup wizard (in Settings) does the whole onboarding: it walks you through creating the free Tuya developer account and linking the SmartLife app, then fetches every device's keys straight from the Tuya cloud and finds the devices on your network automatically — no terminal, no files. After setup, control never touches the cloud again.
 - Preferences is now called Settings, with the SmartLife section split into a setup group and a device list, and live per-device connection status.
