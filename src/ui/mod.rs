@@ -150,6 +150,8 @@ const APP_CSS: &str = "
   color: white;
   border-radius: 999px;
   padding: 3px 8px;
+  /* 54px content + 2×8px padding = a 70px pill, matching the color chips. */
+  min-width: 54px;
   font-size: 0.75em;
   font-weight: 700;
 }
@@ -330,7 +332,7 @@ pub fn activate(app: &adw::Application) {
     // Whole-house master controls
     let house_switch = gtk::Switch::builder().valign(gtk::Align::Center).build();
     let house_scale = compact_scale();
-    let (house_dot, house_dot_color) = color_dot(45);
+    let (house_dot, house_dot_color) = color_dot(70);
     let house_color_btn = gtk::MenuButton::builder()
         .child(&house_dot)
         .tooltip_text("Color of all lights")
@@ -422,8 +424,10 @@ pub fn activate(app: &adw::Application) {
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .title("Luxel")
-        .default_width(480)
+        .default_width(528)
         .default_height(760)
+        // The layout is designed for 528px; don't let it squeeze narrower.
+        .width_request(528)
         .content(&toolbar_view)
         .build();
 
@@ -1129,7 +1133,7 @@ impl Ui {
                     colors.push(rgb);
                 }
             }
-            row.add_prefix(&scene_chip(45, &colors));
+            row.add_prefix(&scene_chip(70, &colors));
             row.connect_activated({
                 let ui = self.clone();
                 let name = scene.name.clone();
@@ -1457,7 +1461,7 @@ fn new_room_section(room: &str, ui: &Rc<Ui>) -> RoomSection {
         .valign(gtk::Align::Center)
         .tooltip_text("All lights in this room")
         .build();
-    let (dot, dot_color) = color_dot(45);
+    let (dot, dot_color) = color_dot(70);
     let color_btn = gtk::MenuButton::builder()
         .child(&dot)
         .tooltip_text("Room color")
