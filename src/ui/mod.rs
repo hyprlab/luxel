@@ -175,7 +175,7 @@ pub fn activate(app: &adw::Application) {
     // dir and register it as an unthemed icon search path.
     let icon_dir = glib::user_cache_dir().join("luxel").join("icons");
     let _ = std::fs::create_dir_all(&icon_dir);
-    let bundled: [(&str, &[u8]); 3] = [
+    let bundled: [(&str, &[u8]); 4] = [
         (
             "external-link-symbolic.svg",
             include_bytes!("../../data/icons/external-link-symbolic.svg"),
@@ -183,6 +183,10 @@ pub fn activate(app: &adw::Application) {
         (
             "update-symbolic.svg",
             include_bytes!("../../data/icons/update-symbolic.svg"),
+        ),
+        (
+            "info-outline-symbolic.svg",
+            include_bytes!("../../data/icons/info-outline-symbolic.svg"),
         ),
         (
             "io.github.hyprlab.Luxel.png",
@@ -1021,6 +1025,46 @@ impl Ui {
             );
         }
         self.refresh_headers();
+    }
+
+    /// Fill a details popover with the device's latest reported facts
+    /// (MAC, IP, product, data points, …). Called each time it opens, so
+    /// the values are always current.
+    pub fn populate_device_info(&self, id: &str, container: &gtk::Box) {
+        while let Some(child) = container.first_child() {
+            container.remove(&child);
+        }
+        let details = self
+            .merged
+            .borrow()
+            .get(id)
+            .map(|m| m.state.details.clone())
+            .unwrap_or_default();
+        if details.is_empty() {
+            let empty = gtk::Label::builder()
+                .label("No details reported yet")
+                .css_classes(["dim-label"])
+                .build();
+            container.append(&empty);
+            return;
+        }
+        for (label, value) in details {
+            let item = gtk::Box::new(gtk::Orientation::Vertical, 1);
+            let name = gtk::Label::builder()
+                .label(label)
+                .halign(gtk::Align::Start)
+                .css_classes(["caption-heading", "dim-label"])
+                .build();
+            let value = gtk::Label::builder()
+                .label(value)
+                .halign(gtk::Align::Start)
+                .selectable(true)
+                .wrap(true)
+                .build();
+            item.append(&name);
+            item.append(&value);
+            container.append(&item);
+        }
     }
 
     /// Move a bulb to a (possibly new) room; empty clears the override.
@@ -2351,7 +2395,7 @@ fn demo_populate(ui: &Rc<Ui>) {
         ("d073d5000007", "Shelf", "Office", true,
          Hsbk { hue: deg(190.0), saturation: pct(80.0), brightness: pct(70.0), kelvin: 3500 }),
     ];
-    for (id, label, room, powered, color) in bulbs {
+    for (i, (id, label, room, powered, color)) in bulbs.iter().enumerate() {
         ui.upsert(BulbState {
             id: id.to_string(),
             backend: Backend::Lan,
@@ -2362,6 +2406,16 @@ fn demo_populate(ui: &Rc<Ui>) {
             color: *color,
             connected: true,
             lan_target: None,
+            details: vec![
+                ("Serial".to_string(), id.to_string()),
+                (
+                    "MAC address".to_string(),
+                    format!("d0:73:d5:00:00:{:02x}", i + 1),
+                ),
+                ("IP address".to_string(), format!("10.7.1.{}:56700", 30 + i)),
+                ("Product".to_string(), "LIFX Color 1000".to_string()),
+                ("Firmware".to_string(), "3.90".to_string()),
+            ],
         });
     }
     // A SmartLife/Tuya smart plug, to show the power-only row.
@@ -2375,6 +2429,14 @@ fn demo_populate(ui: &Rc<Ui>) {
         color: Hsbk::default(),
         connected: true,
         lan_target: None,
+        details: vec![
+            ("Device ID".to_string(), "demo0123456789abcdefg".to_string()),
+            ("IP address".to_string(), "10.7.1.20:6668".to_string()),
+            ("Protocol".to_string(), "Tuya 3.3".to_string()),
+            ("Switch data point".to_string(), "1".to_string()),
+            ("State (Data point 1)".to_string(), "ON".to_string()),
+            ("Data point 9".to_string(), "0".to_string()),
+        ],
     });
     {
         let mut cfg = ui.config.borrow_mut();

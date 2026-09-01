@@ -58,6 +58,9 @@ pub struct BulbState {
     pub connected: bool,
     /// LAN protocol target address (only set by the LIFX LAN backend).
     pub lan_target: Option<u64>,
+    /// Vendor/device facts for the Details dialog, as ordered
+    /// (label, value) pairs — MAC, IP, product, firmware, data points, …
+    pub details: Vec<(String, String)>,
 }
 
 /// Events flowing from backend threads to the UI.

@@ -21,6 +21,12 @@ struct CloudLight {
     brightness: f64,
     color: CloudColor,
     group: Option<CloudGroup>,
+    product: Option<CloudProduct>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CloudProduct {
+    name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -182,6 +188,13 @@ fn to_state(light: CloudLight) -> BulbState {
         },
         connected: light.connected,
         lan_target: None,
+        details: {
+            let mut details = vec![("Serial".to_string(), light.id.to_lowercase())];
+            if let Some(product) = light.product {
+                details.push(("Product".to_string(), product.name));
+            }
+            details
+        },
     }
 }
 
