@@ -1,12 +1,28 @@
-# Luxel
+<p align="center">
+  <img src="docs/logo.png" width="120" alt="Luxel logo">
+</p>
 
-A native GNOME app (Rust + GTK4 + libadwaita) for controlling LIFX smart bulbs
-from the Linux desktop — no phone required.
+<h1 align="center">Luxel</h1>
+
+<p align="center">
+  Control <strong>LIFX</strong> lights and <strong>SmartLife</strong> plugs from the Linux desktop —
+  native GNOME, built with Rust and libadwaita, no phone required.
+</p>
+
+<p align="center">
+  <a href="https://luxel.hyprlab.co">Website</a> ·
+  <a href="RELEASE_NOTES.md">Release notes</a> ·
+  <a href="https://github.com/hyprlab/luxel/releases">Releases</a>
+  <br>
+  <img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue">
+</p>
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Luxel — Lights view with rooms, color chips, and SmartLife devices" width="420">
   <img src="docs/screenshot-color.png" alt="Luxel — a room's inline color panel with the hue wheel open" width="420">
 </p>
+
+---
 
 ## Features
 
