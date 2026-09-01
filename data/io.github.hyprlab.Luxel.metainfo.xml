@@ -33,6 +33,11 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="1.2.2" date="2026-09-01">
+      <description>
+        <p>Inline slide-down color controls for rooms, a device-details popover (MAC, IP, product, firmware, data points), connection/vendor subtitles with an Interface setting, mesh-gradient room color chips, and sizing polish.</p>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-08-31">
       <description>
         <p>SmartLife/Tuya smart plug support with fully local control, a guided setup wizard that fetches device keys from the Tuya cloud and finds devices on the network, a Settings redesign, a HIG-aligned menu with a keyboard shortcuts dialog, and a refreshed icon.</p>
