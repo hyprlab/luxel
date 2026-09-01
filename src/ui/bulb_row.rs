@@ -296,8 +296,9 @@ impl BulbRow {
     }
 
     /// Sync all widgets to the given merged state without triggering the
-    /// user-input signal handlers.
-    pub fn apply(&self, m: &Merged, room: &str) {
+    /// user-input signal handlers. `subtitles` controls the per-device
+    /// "Local · LIFX"-style detail line.
+    pub fn apply(&self, m: &Merged, room: &str, subtitles: bool) {
         let s = &m.state;
         let plug = s.kind == DeviceKind::Plug;
         self.row.set_title(&glib::markup_escape_text(&s.label));
@@ -305,14 +306,25 @@ impl BulbRow {
         let via_lan =
             (m.has_lan && m.lan_connected) || (s.backend == Backend::Tuya && s.connected);
         let reachable = via_lan || (m.has_cloud && s.connected);
-        let subtitle = if via_lan {
-            "Local"
-        } else if reachable {
-            "Cloud"
+        // An offline device always says so, regardless of the preference.
+        let subtitle = if !subtitles && reachable {
+            String::new()
         } else {
-            "Offline"
+            let connection = if via_lan {
+                "Local"
+            } else if reachable {
+                "Cloud"
+            } else {
+                "Offline"
+            };
+            let vendor = if s.backend == Backend::Tuya {
+                "SmartLife"
+            } else {
+                "LIFX"
+            };
+            format!("{connection} · {vendor}")
         };
-        self.row.set_subtitle(subtitle);
+        self.row.set_subtitle(&subtitle);
         self.row.set_sensitive(reachable);
 
         self.power.block_signal(&self.h_power);

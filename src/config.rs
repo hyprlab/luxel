@@ -90,6 +90,9 @@ pub struct Config {
     pub tuya_api_secret: String,
     /// Data center region code ("us", "eu", …); empty until chosen.
     pub tuya_api_region: String,
+    /// Hide the per-device "Local · LIFX"-style subtitle (negative flag so
+    /// the derived default of `false` means "shown").
+    pub hide_device_subtitles: bool,
 }
 
 fn config_path() -> PathBuf {

@@ -679,7 +679,7 @@ impl Ui {
         }
 
         if let Some(row) = self.rows.borrow().get(id) {
-            row.apply(&snapshot, &room);
+            row.apply(&snapshot, &room, !self.config.borrow().hide_device_subtitles);
         }
         if moved || title_changed {
             if let Some(section) = self.sections.borrow().get(&room) {
@@ -909,7 +909,17 @@ impl Ui {
     fn refresh_row(&self, id: &str, snapshot: &Merged) {
         let room = self.row_room.borrow().get(id).cloned();
         if let (Some(row), Some(room)) = (self.rows.borrow().get(id), room) {
-            row.apply(snapshot, &room);
+            row.apply(snapshot, &room, !self.config.borrow().hide_device_subtitles);
+        }
+    }
+
+    /// Re-sync every device row (e.g. after a display setting changes).
+    fn refresh_all_rows(&self) {
+        let ids: Vec<String> = self.rows.borrow().keys().cloned().collect();
+        for id in ids {
+            if let Some(snapshot) = self.merged.borrow().get(&id).cloned() {
+                self.refresh_row(&id, &snapshot);
+            }
         }
     }
 
@@ -2058,11 +2068,32 @@ fn show_preferences(ui: &Rc<Ui>) {
         }
     });
 
+    // Interface options.
+    let ui_group = adw::PreferencesGroup::builder().title("Interface").build();
+    let subtitles_row = adw::SwitchRow::builder()
+        .title("Device Details")
+        .subtitle("Show the connection (Local/Cloud) and vendor under each light and plug")
+        .build();
+    subtitles_row.set_active(!ui.config.borrow().hide_device_subtitles);
+    subtitles_row.connect_active_notify({
+        let ui = ui.clone();
+        move |row| {
+            {
+                let mut cfg = ui.config.borrow_mut();
+                cfg.hide_device_subtitles = !row.is_active();
+                cfg.save();
+            }
+            ui.refresh_all_rows();
+        }
+    });
+    ui_group.add(&subtitles_row);
+
     let page = adw::PreferencesPage::new();
     page.add(&lan_group);
     page.add(&tuya_group);
     page.add(&tuya_devices_group);
     page.add(&group);
+    page.add(&ui_group);
     let dialog = adw::PreferencesDialog::new();
     dialog.set_title("Settings");
     dialog.add(&page);
