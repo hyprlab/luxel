@@ -51,7 +51,7 @@ struct RoomSection {
     scale: gtk::Scale,
     h_scale: SignalHandlerId,
     spin: gtk::SpinButton,
-    color_btn: gtk::MenuButton,
+    color_btn: gtk::ToggleButton,
     dot: gtk::DrawingArea,
     dot_color: SharedColors,
 }
@@ -68,7 +68,7 @@ pub struct Ui {
     house_scale: gtk::Scale,
     h_house_scale: OnceCell<SignalHandlerId>,
     house_spin: gtk::SpinButton,
-    house_color_btn: gtk::MenuButton,
+    house_color_btn: gtk::ToggleButton,
     house_dot: gtk::DrawingArea,
     house_dot_color: SharedColors,
     rooms_box: gtk::Box,
@@ -150,8 +150,8 @@ const APP_CSS: &str = "
   color: white;
   border-radius: 999px;
   padding: 3px 8px;
-  /* 54px content + 2×8px padding = a 70px pill, matching the color chips. */
-  min-width: 54px;
+  /* 48px content + 2×8px padding = a 64px pill, matching the color chips. */
+  min-width: 48px;
   font-size: 0.75em;
   font-weight: 700;
 }
@@ -332,8 +332,8 @@ pub fn activate(app: &adw::Application) {
     // Whole-house master controls
     let house_switch = gtk::Switch::builder().valign(gtk::Align::Center).build();
     let house_scale = compact_scale();
-    let (house_dot, house_dot_color) = color_dot(70);
-    let house_color_btn = gtk::MenuButton::builder()
+    let (house_dot, house_dot_color) = color_dot(64);
+    let house_color_btn = gtk::ToggleButton::builder()
         .child(&house_dot)
         .tooltip_text("Color of all lights")
         .valign(gtk::Align::Center)
@@ -426,8 +426,8 @@ pub fn activate(app: &adw::Application) {
         .title("Luxel")
         .default_width(528)
         .default_height(760)
-        // The layout is designed for 528px; don't let it squeeze narrower.
-        .width_request(528)
+        // The layout is designed for ~528px; don't let it squeeze narrower.
+        .width_request(524)
         .content(&toolbar_view)
         .build();
 
@@ -473,7 +473,10 @@ pub fn activate(app: &adw::Application) {
         }
     });
     let _ = ui.h_house_scale.set(h);
-    house_color_btn.set_popover(Some(&color_popover(&ui, None, house_scale.adjustment())));
+    house_list.append(&color_panel_row(
+        &color_panel(&ui, None, house_scale.adjustment()),
+        &house_color_btn,
+    ));
 
     save_scene_btn.connect_clicked({
         let ui = ui.clone();
@@ -805,6 +808,10 @@ impl Ui {
             // Brightness and color make no sense when only plugs are around.
             self.house_scale.set_visible(bulbs > 0);
             self.house_spin.set_visible(bulbs > 0);
+            if bulbs == 0 {
+                // Collapse an open color panel along with its toggle.
+                self.house_color_btn.set_active(false);
+            }
             self.house_color_btn.set_visible(bulbs > 0);
             *self.house_dot_color.borrow_mut() = colors;
             self.house_dot.queue_draw();
@@ -829,6 +836,10 @@ impl Ui {
                 // A room holding only plugs keeps just its power switch.
                 section.scale.set_visible(bulbs > 0);
                 section.spin.set_visible(bulbs > 0);
+                if bulbs == 0 {
+                    // Collapse an open color panel along with its toggle.
+                    section.color_btn.set_active(false);
+                }
                 section.color_btn.set_visible(bulbs > 0);
                 *section.dot_color.borrow_mut() = colors;
                 section.dot.queue_draw();
@@ -1133,7 +1144,7 @@ impl Ui {
                     colors.push(rgb);
                 }
             }
-            row.add_prefix(&scene_chip(70, &colors));
+            row.add_prefix(&scene_chip(64, &colors));
             row.connect_activated({
                 let ui = self.clone();
                 let name = scene.name.clone();
@@ -1271,16 +1282,18 @@ impl Ui {
     }
 }
 
-/// A popover that recolors a whole room, or the whole house when `room` is
-/// None. A Colors/Whites toggle switches between the color wheel (plus hex
-/// entry) and a warmth slider. `brightness_adj` is the header brightness
-/// slider's adjustment: the popover embeds a second slider on the same
-/// adjustment so the two always match and share one set of handlers.
-fn color_popover(
+/// An inline panel that recolors a whole room, or the whole house when
+/// `room` is None; it slides down inside the room card (from the header's
+/// color chip toggle) rather than floating as a popover. A Colors/Whites
+/// toggle switches between the color wheel (plus hex entry) and a warmth
+/// slider. `brightness_adj` is the header brightness slider's adjustment:
+/// the panel embeds a second slider on the same adjustment so the two
+/// always match and share one set of handlers.
+fn color_panel(
     ui: &Rc<Ui>,
     room: Option<String>,
     brightness_adj: gtk::Adjustment,
-) -> gtk::Popover {
+) -> gtk::Box {
     let wheel_throttle = Throttler::new(100);
     let wheel = ColorWheel::new({
         let ui = ui.clone();
@@ -1439,20 +1452,58 @@ fn color_popover(
         .orientation(gtk::Orientation::Vertical)
         .spacing(10)
         .margin_top(12)
-        .margin_bottom(12)
+        .margin_bottom(16)
         .margin_start(12)
         .margin_end(12)
-        // Keep the popover the same width in both views: without this it
+        .halign(gtk::Align::Center)
+        // Keep the panel the same width in both views: without this it
         // collapses in Whites mode, since bare sliders have almost no
         // natural width once the color wheel is hidden.
-        .width_request(232)
+        .width_request(260)
         .build();
     content.append(&mode_box);
     content.append(&colors_box);
     content.append(&whites_box);
     content.append(&brightness_box);
+    content
+}
 
-    gtk::Popover::builder().child(&content).build()
+/// Wrap a room-color panel in a slide-down revealer row (hidden until the
+/// header's color chip toggle opens it), wired to `toggle`.
+fn color_panel_row(panel: &gtk::Box, toggle: &gtk::ToggleButton) -> gtk::ListBoxRow {
+    let revealer = gtk::Revealer::builder()
+        .transition_type(gtk::RevealerTransitionType::SlideDown)
+        .transition_duration(250)
+        .child(panel)
+        .build();
+    let row = gtk::ListBoxRow::builder()
+        .activatable(false)
+        .selectable(false)
+        .focusable(false)
+        .child(&revealer)
+        .visible(false)
+        .build();
+    // Fully hide the row once the slide-up ends so no separator lingers.
+    revealer.connect_child_revealed_notify({
+        let row = row.clone();
+        move |revealer| {
+            if !revealer.is_child_revealed() && !revealer.reveals_child() {
+                row.set_visible(false);
+            }
+        }
+    });
+    toggle.connect_toggled({
+        let row = row.clone();
+        move |btn| {
+            if btn.is_active() {
+                row.set_visible(true);
+                revealer.set_reveal_child(true);
+            } else {
+                revealer.set_reveal_child(false);
+            }
+        }
+    });
+    row
 }
 
 fn new_room_section(room: &str, ui: &Rc<Ui>) -> RoomSection {
@@ -1461,14 +1512,17 @@ fn new_room_section(room: &str, ui: &Rc<Ui>) -> RoomSection {
         .valign(gtk::Align::Center)
         .tooltip_text("All lights in this room")
         .build();
-    let (dot, dot_color) = color_dot(70);
-    let color_btn = gtk::MenuButton::builder()
+    let (dot, dot_color) = color_dot(64);
+    let color_btn = gtk::ToggleButton::builder()
         .child(&dot)
         .tooltip_text("Room color")
         .valign(gtk::Align::Center)
         .css_classes(["flat", "circular"])
-        .popover(&color_popover(ui, Some(room.to_string()), scale.adjustment()))
         .build();
+    let color_row = color_panel_row(
+        &color_panel(ui, Some(room.to_string()), scale.adjustment()),
+        &color_btn,
+    );
 
     // Identical widget and layout to the All Lights card. Clicking the row
     // slides the room's bulb rows open/closed inside the same card.
@@ -1524,6 +1578,7 @@ fn new_room_section(room: &str, ui: &Rc<Ui>) -> RoomSection {
         .css_classes(["boxed-list"])
         .build();
     root.append(&header);
+    root.append(&color_row);
     root.append(&lights_row);
 
     let h_switch = switch.connect_active_notify({
