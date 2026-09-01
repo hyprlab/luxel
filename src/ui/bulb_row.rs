@@ -47,11 +47,10 @@ impl BulbRow {
 
         // Colored dot showing the bulb's current color; plugs show an
         // ON/OFF chip instead (swapped in apply()).
-        let (dot, dot_color) = color_dot(45);
+        let (dot, dot_color) = color_dot(70);
         row.add_prefix(&dot);
         let plug_chip = gtk::Label::builder()
             .label("OFF")
-            .width_chars(3)
             .valign(gtk::Align::Center)
             .css_classes(["plug-chip", "off"])
             .visible(false)
