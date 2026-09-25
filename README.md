@@ -138,11 +138,15 @@ app's sandboxed config directory
 
 Luxel is built by a human maintainer working with generative AI as a development tool:
 
-- **Code** — the large majority of the Rust code in this repository was written with Anthropic's Claude (via Claude Code), working from the maintainer's direction. The maintainer decides what gets built, reviews the results, tests every release, and signs off on everything that ships.
+- **Code** — the large majority of the Rust code in this repository was written with Anthropic's Claude (via Claude Code), working from the maintainer's direction. The maintainer decides what gets built, reviews the results, tests every release, and signs off on everything that ships. Commits are made under the maintainer's name; the tool is declared here once instead of in a trailer on every commit.
 - **Text** — documentation, release notes, and in-app copy are largely AI-drafted and human-edited.
 - **The app itself contains no AI.** Luxel has no AI features and makes no requests to AI services — it talks only to your lights and smart plugs on your local network (plus the optional LIFX/Tuya cloud endpoints you configure). AI was used to *build* the app, not to run it.
 
 Bug reports and pull requests are welcome from humans and their AI tools alike; everything merged gets the same human review.
+
+## Contributing
+
+Bug reports, feature requests and code are all welcome. **[How to contribute →](docs/CONTRIBUTING.md)**
 
 ## License
 
