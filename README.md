@@ -5,7 +5,7 @@
 <h1 align="center">Luxel</h1>
 
 <p align="center">
-  Control <strong>LIFX</strong> lights and <strong>SmartLife</strong> plugs from the Linux desktop —
+  Control <strong>LIFX</strong> lights and <strong>SmartLife</strong> plugs from the Linux desktop:
   native GNOME, built with Rust and libadwaita, no phone required.
 </p>
 
@@ -18,38 +18,38 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Luxel — Lights view with rooms, color chips, and SmartLife devices" width="420">
-  <img src="docs/screenshot-color.png" alt="Luxel — a room's inline color panel with the hue wheel open" width="420">
+  <img src="docs/screenshot.png" alt="Luxel: the Lights view with rooms, color chips, and SmartLife devices" width="420">
+  <img src="docs/screenshot-color.png" alt="Luxel: a room's inline color panel with the hue wheel open" width="420">
 </p>
 
 ---
 
 ## Features
 
-- **Local control, no cloud needed** — bulbs are discovered directly on your
+- **Local control, no cloud needed**: bulbs are discovered directly on your
   Wi-Fi/LAN using the LIFX UDP protocol (port 56700) and controlled with
   millisecond latency.
-- **Isolated IoT networks supported** — if your bulbs live on a separate
+- **Isolated IoT networks supported**: if your bulbs live on a separate
   subnet/VLAN where broadcast discovery can't reach them, list their subnets
   in Settings (e.g. `192.168.20.0/24`). Each configured subnet gets a
   directed-broadcast probe plus a unicast sweep of every host address (up to
   a /22), which routes across VLANs. Your router's firewall must allow
   traffic from this machine to the IoT network on UDP port 56700.
-- **Optional LIFX Cloud support** — add a personal access token
+- **Optional LIFX Cloud support**: add a personal access token
   (from <https://cloud.lifx.com/settings>) in Settings to list and control
   lights through the cloud, e.g. when you're on a different network. When a
   bulb is reachable both ways, local control is always preferred.
-- **Rooms** — bulbs are grouped into room sections (from their LIFX group by
+- **Rooms**: bulbs are grouped into room sections (from their LIFX group by
   default; assign any bulb to a different or new room from its Room field).
   Every room header has a color button (wheel + warmth popover), power
   switch, and brightness slider, and an "All Lights" row applies the same
   controls to the whole house at once.
-- **SmartLife/Tuya smart plugs** — plugs that use the Tuya local protocol
+- **SmartLife/Tuya smart plugs**: plugs that use the Tuya local protocol
   (SmartLife app) are controlled locally over TCP port 6668, including
   across subnets/VLANs. Tuya encrypts local control with a per-device
   *local key* that has to be fetched once from the Tuya cloud; the
   built-in **SmartLife Setup wizard** (in Settings) walks through the whole
-  process — Tuya developer account, linking the SmartLife app, then
+  process: Tuya developer account, linking the SmartLife app, then
   fetching every device's ID and local key straight from the Tuya Cloud
   API in-app (no terminal needed; importing a
   [tinytuya](https://github.com/jasonacox/tinytuya) `devices.json` remains
@@ -60,7 +60,7 @@
   (no color controls), join rooms and scenes, and count into the room and
   All Lights switches. Devices can also be entered by hand in
   Settings.
-- **Scenes** — save the current state of your lights under a name and restore
+- **Scenes**: save the current state of your lights under a name and restore
   it with one click, choosing exactly which lights each scene includes.
   Scenes are stored locally, so they work without any cloud account.
 - Per-bulb power switch, brightness slider, and a Colors/Whites mode toggle:
@@ -116,7 +116,7 @@ dependencies in `Cargo.toml`, regenerate the list with:
 
 ## Sandbox permissions
 
-- `--share=network` — required both for LAN UDP discovery/control and for the
+- `--share=network`: required both for LAN UDP discovery/control and for the
   optional cloud API.
 - Wayland (with X11 fallback) and DRI for rendering.
 
@@ -126,11 +126,11 @@ app's sandboxed config directory
 
 ## Architecture
 
-- `src/lan.rs` — background thread speaking the LIFX LAN protocol over UDP
+- `src/lan.rs`: background thread speaking the LIFX LAN protocol over UDP
   ([lifx-core](https://crates.io/crates/lifx-core)): broadcast discovery every
   10 s, state polling every 3 s, set-power/set-color commands.
-- `src/cloud.rs` — background thread for the LIFX HTTP API (`api.lifx.com/v1`).
-- `src/ui/` — libadwaita UI. Both backends report bulbs keyed by serial
+- `src/cloud.rs`: background thread for the LIFX HTTP API (`api.lifx.com/v1`).
+- `src/ui/`: libadwaita UI. Both backends report bulbs keyed by serial
   number, so a bulb seen by both is merged into a single row; commands route
   to the LAN when the bulb is locally reachable, falling back to the cloud.
 
@@ -138,9 +138,9 @@ app's sandboxed config directory
 
 Luxel is built by a human maintainer working with generative AI as a development tool:
 
-- **Code** — the large majority of the Rust code in this repository was written with Anthropic's Claude (via Claude Code), working from the maintainer's direction. The maintainer decides what gets built, reviews the results, tests every release, and signs off on everything that ships. Commits are made under the maintainer's name; the tool is declared here once instead of in a trailer on every commit.
-- **Text** — documentation, release notes, and in-app copy are largely AI-drafted and human-edited.
-- **The app itself contains no AI.** Luxel has no AI features and makes no requests to AI services — it talks only to your lights and smart plugs on your local network (plus the optional LIFX/Tuya cloud endpoints you configure). AI was used to *build* the app, not to run it.
+- **Code:** the large majority of the Rust code in this repository was written with Anthropic's Claude (via Claude Code), working from the maintainer's direction. The maintainer decides what gets built, reviews the results, tests every release, and signs off on everything that ships. Commits are made under the maintainer's name; the tool is declared here once instead of in a trailer on every commit.
+- **Text:** documentation, release notes, and in-app copy are largely AI-drafted and human-edited.
+- **The app itself contains no AI.** Luxel has no AI features and makes no requests to AI services. It talks only to your lights and smart plugs on your local network (plus the optional LIFX/Tuya cloud endpoints you configure). AI was used to *build* the app, not to run it.
 
 Bug reports and pull requests are welcome from humans and their AI tools alike; everything merged gets the same human review.
 
