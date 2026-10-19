@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.3 — 2026-10-19
+- SmartLife plugs that get a new address from DHCP are found again automatically. After three failed connects in a row, Luxel scans the /24 around the configured address in the background, identifies the plug by its local key, saves the new address and reconnects. This covers plugs on another subnet, whose UDP broadcasts never arrive.
+
 ## 1.2.2 — 2026-09-01
 - Room and All Lights color controls now slide down inline inside the room card (Colors/Whites panel on the header's color chip toggle) instead of opening a popover overlay.
 - Device details popover: an info button beside each row's power switch shows locally sourced facts — LIFX serial/MAC/IP, product name and firmware; SmartLife device ID, address, protocol version, an ON/OFF state line, and the device's remaining raw data points (noise DPs hidden). Values are selectable for copying.

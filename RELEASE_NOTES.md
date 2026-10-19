@@ -1,6 +1,9 @@
 # Luxel
 
-## What's new in 1.2.2
+## What's new in 1.2.3
+- SmartLife plugs that get a new IP address from the router are found again on their own, including plugs on another subnet. Luxel saves the new address and reconnects without a manual rescan.
+
+## In 1.2.2
 - Room and All Lights color controls now slide down inside the card — no more floating overlay.
 - A new info button next to each device's power switch pops over the device's details: MAC address, IP, product and firmware for LIFX; device ID, protocol, state, and raw data points for SmartLife plugs. Everything is copyable.
 - Each light's subtitle shows how it's connected and by which vendor (e.g. "Local · LIFX") — switchable off in Settings → Interface, though offline devices always say so.

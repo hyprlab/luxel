@@ -33,6 +33,11 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="1.2.3" date="2026-10-19">
+      <description>
+        <p>SmartLife plugs that get a new IP address from DHCP are found again automatically, including plugs on another subnet.</p>
+      </description>
+    </release>
     <release version="1.2.2" date="2026-09-01">
       <description>
         <p>Inline slide-down color controls for rooms, a device-details popover (MAC, IP, product, firmware, data points), connection/vendor subtitles with an Interface setting, mesh-gradient room color chips, and sizing polish.</p>
