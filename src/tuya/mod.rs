@@ -6,7 +6,9 @@
 //! by hand (IP + device id + local key) in Preferences rather than
 //! discovered. UDP broadcasts (ports 6666/6667) are still listened to: when
 //! a configured device announces itself we pick up its current IP and
-//! protocol version automatically.
+//! protocol version automatically. Broadcasts don't cross subnets, so a
+//! device that keeps failing to connect is also searched for by sweeping its
+//! subnet, in case DHCP gave it a new address.
 
 pub mod cloud;
 mod protocol;
@@ -14,7 +16,9 @@ mod protocol;
 use std::collections::HashMap;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use crate::config::TuyaDevice as TuyaConfig;
@@ -30,6 +34,10 @@ const OFFLINE_AFTER: Duration = Duration::from_secs(20);
 /// After we push a change, ignore state reports briefly so a stale in-flight
 /// report doesn't yank the UI controls backwards.
 const SUPPRESS_AFTER_COMMAND: Duration = Duration::from_millis(1500);
+/// Consecutive failed connects before a device is presumed to have moved.
+const RELOCATE_AFTER_FAILURES: u32 = 3;
+/// Minimum gap between automatic subnet sweeps.
+const RELOCATE_INTERVAL: Duration = Duration::from_secs(120);
 
 /// Version candidates tried in turn when the configured version is "auto".
 const AUTO_VERSIONS: [Version; 3] = [Version::V33, Version::V34, Version::V35];
@@ -63,6 +71,8 @@ struct Device {
     last_dps: serde_json::Map<String, serde_json::Value>,
     powered: bool,
     connected: bool,
+    /// Consecutive failed connection attempts.
+    failures: u32,
     last_ok: Instant,
     next_attempt: Instant,
     suppress_until: Instant,
@@ -80,6 +90,7 @@ impl Device {
             last_dps: serde_json::Map::new(),
             powered: false,
             connected: false,
+            failures: 0,
             last_ok: now,
             next_attempt: now,
             suppress_until: now,
@@ -188,6 +199,8 @@ fn run(events: async_channel::Sender<Event>, commands: Receiver<TuyaCommand>) {
 
     let mut devices: HashMap<String, Device> = HashMap::new();
     let mut last_poll = Instant::now() - POLL_INTERVAL;
+    let relocating = Arc::new(AtomicBool::new(false));
+    let mut last_relocate: Option<Instant> = None;
 
     loop {
         loop {
@@ -200,9 +213,16 @@ fn run(events: async_channel::Sender<Event>, commands: Receiver<TuyaCommand>) {
 
         if last_poll.elapsed() >= POLL_INTERVAL {
             last_poll = Instant::now();
+            let sweeping = relocating.load(Ordering::Relaxed);
             for dev in devices.values_mut() {
+                // Leave a presumed-moved device alone while the sweep
+                // probes for it, so we don't race it for connections.
+                if sweeping && dev.failures >= RELOCATE_AFTER_FAILURES {
+                    continue;
+                }
                 poll_device(&events, dev);
             }
+            maybe_relocate(&events, &devices, &relocating, &mut last_relocate);
         }
 
         listen_udp(&udp, &mut devices);
@@ -291,8 +311,12 @@ fn handle_command(
                 }
             }
         }
-        TuyaCommand::Locate { devices, subnets } => {
-            locate(events, devices, subnets);
+        TuyaCommand::Locate {
+            devices: candidates,
+            subnets,
+        } => {
+            let skip = connected_hosts(devices);
+            locate(events, candidates, subnets, &skip, true);
         }
     }
 }
@@ -354,6 +378,7 @@ fn connect_device(events: &async_channel::Sender<Event>, dev: &mut Device) {
             }
             dev.version = Some(version);
             dev.conn = Some(conn);
+            dev.failures = 0;
             dev.last_ok = Instant::now();
             if !dev.connected {
                 dev.connected = true;
@@ -366,6 +391,7 @@ fn connect_device(events: &async_channel::Sender<Event>, dev: &mut Device) {
                 dev.cfg.host,
                 version.as_str()
             );
+            dev.failures = dev.failures.saturating_add(1);
             if dev.version.is_none() {
                 dev.probe_idx += 1;
                 // Try the next candidate soon rather than in 5 s.
@@ -442,40 +468,115 @@ fn probe(ip: Ipv4Addr, devid: &str, key: &[u8; 16], version: Version) -> Result<
     }
 }
 
-/// Scan `subnets` for hosts with TCP 6668 open, then identify which of
-/// `candidates` lives at each host by seeing whose local key fits.
+/// Hosts of devices with a live connection. A sweep skips them: probing a
+/// plug with another device's key opens a second session, which many plugs
+/// refuse or answer by dropping the first.
+fn connected_hosts(devices: &HashMap<String, Device>) -> Vec<Ipv4Addr> {
+    devices
+        .values()
+        .filter(|d| d.conn.is_some())
+        .filter_map(|d| d.cfg.host.trim().parse().ok())
+        .collect()
+}
+
+/// DHCP can hand a plug a new address, and when the plug is on another
+/// subnet its broadcasts never reach us to say so. Once a device keeps
+/// failing to connect, sweep the /24 around its configured address in the
+/// background; a hit arrives as `Event::TuyaFound`, which the UI saves and
+/// feeds back as a new configuration.
+fn maybe_relocate(
+    events: &async_channel::Sender<Event>,
+    devices: &HashMap<String, Device>,
+    relocating: &Arc<AtomicBool>,
+    last_relocate: &mut Option<Instant>,
+) {
+    if relocating.load(Ordering::Relaxed)
+        || last_relocate.is_some_and(|t| t.elapsed() < RELOCATE_INTERVAL)
+    {
+        return;
+    }
+    let lost: Vec<TuyaConfig> = devices
+        .values()
+        .filter(|d| d.conn.is_none() && d.failures >= RELOCATE_AFTER_FAILURES)
+        .map(|d| d.cfg.clone())
+        .collect();
+    let mut subnets: Vec<Subnet> = Vec::new();
+    for cfg in &lost {
+        if let Some(s) = Subnet::parse(&format!("{}/24", cfg.host.trim())) {
+            if !subnets.contains(&s) {
+                subnets.push(s);
+            }
+        }
+    }
+    if subnets.is_empty() {
+        return;
+    }
+    eprintln!(
+        "Tuya: {} device(s) unreachable, sweeping their subnet for a new address",
+        lost.len()
+    );
+    *last_relocate = Some(Instant::now());
+    relocating.store(true, Ordering::Relaxed);
+    let skip = connected_hosts(devices);
+    let events = events.clone();
+    let done = relocating.clone();
+    let spawned = std::thread::Builder::new()
+        .name("tuya-relocate".into())
+        .spawn(move || {
+            locate(&events, lost, subnets, &skip, false);
+            done.store(false, Ordering::Relaxed);
+        });
+    if spawned.is_err() {
+        relocating.store(false, Ordering::Relaxed);
+    }
+}
+
+/// Scan `subnets` for hosts with TCP 6668 open (except `skip`), then
+/// identify which of `candidates` lives at each host by seeing whose local
+/// key fits. A manual scan reports every match and a summary; an automatic
+/// one reports only devices whose address or protocol actually changed.
 fn locate(
     events: &async_channel::Sender<Event>,
     candidates: Vec<TuyaConfig>,
     subnets: Vec<Subnet>,
+    skip: &[Ipv4Addr],
+    manual: bool,
 ) {
-    let hosts: Vec<Ipv4Addr> = subnets.iter().flat_map(|s| s.hosts()).collect();
+    let hosts: Vec<Ipv4Addr> = subnets
+        .iter()
+        .flat_map(|s| s.hosts())
+        .filter(|h| !skip.contains(h))
+        .collect();
     let open = scan_port_6668(hosts);
     let mut unmatched = candidates;
     let mut found = 0usize;
     for host in open {
-        let matched = unmatched.iter().position(|cand| {
-            AUTO_VERSIONS.iter().any(|v| {
-                probe(host, cand.id.trim(), &key16(&cand.key), *v)
-                    .map(|_| {
-                        let _ = events.send_blocking(Event::TuyaFound {
-                            id: cand.id.trim().to_string(),
-                            host: host.to_string(),
-                            version: v.as_str().to_string(),
-                        });
-                    })
-                    .is_ok()
-            })
+        let matched = unmatched.iter().enumerate().find_map(|(i, cand)| {
+            AUTO_VERSIONS
+                .iter()
+                .find(|v| probe(host, cand.id.trim(), &key16(&cand.key), **v).is_ok())
+                .map(|v| (i, *v))
         });
-        if let Some(i) = matched {
-            unmatched.remove(i);
+        if let Some((i, version)) = matched {
+            let cand = unmatched.remove(i);
+            let unchanged = cand.host.trim() == host.to_string()
+                && Version::parse(cand.version.trim()) == Some(version);
+            if manual || !unchanged {
+                let _ = events.send_blocking(Event::TuyaFound {
+                    id: cand.id.trim().to_string(),
+                    host: host.to_string(),
+                    version: version.as_str().to_string(),
+                });
+            }
             found += 1;
         }
         if unmatched.is_empty() {
             break;
         }
     }
-    let _ = events.send_blocking(Event::TuyaLocateDone { found });
+    if manual {
+        let _ = events.send_blocking(Event::TuyaLocateDone { found });
+    }
 }
 
 /// Parallel TCP connect scan for port 6668 over up to 1024 hosts per subnet.
